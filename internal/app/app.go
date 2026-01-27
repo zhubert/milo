@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/zhubert/looper/internal/agent"
@@ -20,7 +22,14 @@ type Model struct {
 	// streaming is true when the agent is actively processing.
 	streaming bool
 	// permPending is true when we're waiting for a permission response.
-	permPending bool
+	permPending  bool
+	permToolName string
+
+	// streamCh is the current agent stream channel.
+	streamCh <-chan agent.StreamChunk
+	// streamCancel cancels the current agent context.
+	streamCancel context.CancelFunc
+
 	// quitting signals the app should exit.
 	quitting bool
 }

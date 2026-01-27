@@ -3,14 +3,14 @@ module github.com/zhubert/looper
 go 1.25.4
 
 require (
+	charm.land/bubbles/v2 v2.0.0-rc.1
+	charm.land/bubbletea/v2 v2.0.0-rc.2
+	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251106192539-4b304240aab7
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/spf13/cobra v1.10.2
 )
 
 require (
-	charm.land/bubbles/v2 v2.0.0-rc.1 // indirect
-	charm.land/bubbletea/v2 v2.0.0-rc.2 // indirect
-	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251106192539-4b304240aab7 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/charmbracelet/colorprofile v0.3.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20251116181749-377898bcce38 // indirect
