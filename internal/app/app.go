@@ -12,12 +12,15 @@ type Model struct {
 	agent  *agent.Agent
 	header *ui.Header
 	footer *ui.Footer
+	chat   *ui.Chat
 
 	width  int
 	height int
 
 	// streaming is true when the agent is actively processing.
 	streaming bool
+	// permPending is true when we're waiting for a permission response.
+	permPending bool
 	// quitting signals the app should exit.
 	quitting bool
 }
@@ -28,10 +31,11 @@ func New(ag *agent.Agent, workDir string) *Model {
 		agent:  ag,
 		header: ui.NewHeader(workDir),
 		footer: ui.NewFooter(),
+		chat:   ui.NewChat(),
 	}
 }
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return nil
+	return m.chat.Focus()
 }
