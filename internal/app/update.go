@@ -131,12 +131,12 @@ func (m *Model) handleStreamChunk(chunk agent.StreamChunk) tea.Cmd {
 		m.streaming = false
 		m.chat.FinishStreaming()
 		m.streamCancel = nil
-		errMsg := "Error"
+		errMsg := "Something went wrong"
 		if chunk.Err != nil {
 			errMsg = chunk.Err.Error()
 		}
-		m.footer.SetFlash(ui.ErrorStyle.Render(errMsg))
-		return ui.FlashTick()
+		m.chat.AddErrorMessage(errMsg)
+		return nil
 	}
 
 	return nil

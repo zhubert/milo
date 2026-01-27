@@ -112,6 +112,13 @@ func (c *Chat) AddUserMessage(text string) {
 	c.updateContent()
 }
 
+// AddErrorMessage appends an error message to the history.
+func (c *Chat) AddErrorMessage(text string) {
+	rendered := RenderErrorMessage(text)
+	c.messages = append(c.messages, chatMessage{role: "assistant", content: rendered})
+	c.updateContent()
+}
+
 // AppendStreaming appends text to the current streaming response.
 func (c *Chat) AppendStreaming(text string) {
 	if c.waiting {

@@ -174,6 +174,12 @@ func RenderToolResult(name string, output string, isError bool) string {
 	return prefix + "\n" + detail + "\n"
 }
 
+// RenderErrorMessage formats an error message for the chat area.
+func RenderErrorMessage(text string) string {
+	label := ErrorStyle.Bold(true).Render("Error")
+	return label + "\n" + ErrorStyle.Render(text) + "\n"
+}
+
 // RenderUserMessage formats a user message.
 func RenderUserMessage(text string) string {
 	label := lipgloss.NewStyle().Bold(true).Foreground(ColorText).Render("You")
