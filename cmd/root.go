@@ -1,16 +1,15 @@
 package cmd
 
 import (
-	"bufio"
-	"context"
 	"fmt"
 	"os"
-	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/spf13/cobra"
 
 	"github.com/zhubert/looper/internal/agent"
+	"github.com/zhubert/looper/internal/app"
 	"github.com/zhubert/looper/internal/permission"
 	"github.com/zhubert/looper/internal/tool"
 )
@@ -18,7 +17,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "looper",
 	Short: "A coding agent powered by Claude",
-	RunE:  runCLI,
+	RunE:  runTUI,
 }
 
 // Execute runs the root command.
@@ -28,7 +27,7 @@ func Execute() {
 	}
 }
 
-func runCLI(cmd *cobra.Command, args []string) error {
+func runTUI(cmd *cobra.Command, args []string) error {
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getting working directory: %w", err)
@@ -51,66 +50,11 @@ func runCLI(cmd *cobra.Command, args []string) error {
 	client := anthropic.NewClient()
 	ag := agent.New(client, registry, perms, workDir)
 
-	ctx := context.Background()
-	scanner := bufio.NewScanner(os.Stdin)
-	permScanner := bufio.NewScanner(os.Stdin)
+	m := app.New(ag, workDir)
+	p := tea.NewProgram(m)
 
-	fmt.Println("looper — type a message (ctrl+d to quit)")
-	for {
-		fmt.Print("\n> ")
-		if !scanner.Scan() {
-			break
-		}
-
-		msg := strings.TrimSpace(scanner.Text())
-		if msg == "" {
-			continue
-		}
-
-		ch := ag.SendMessage(ctx, msg)
-		for chunk := range ch {
-			switch chunk.Type {
-			case agent.ChunkText:
-				fmt.Print(chunk.Text)
-			case agent.ChunkToolUse:
-				fmt.Printf("\n[tool: %s]\n", chunk.ToolName)
-			case agent.ChunkToolResult:
-				if chunk.Result != nil {
-					prefix := "result"
-					if chunk.Result.IsError {
-						prefix = "error"
-					}
-					output := chunk.Result.Output
-					if len(output) > 500 {
-						output = output[:500] + "..."
-					}
-					fmt.Printf("[%s: %s]\n", prefix, output)
-				}
-			case agent.ChunkPermissionRequest:
-				fmt.Printf("\n[permission required for %s] (y)es / (n)o / (a)lways: ", chunk.ToolName)
-				if permScanner.Scan() {
-					answer := strings.TrimSpace(strings.ToLower(permScanner.Text()))
-					switch answer {
-					case "y", "yes":
-						ag.PermResp <- agent.PermissionGranted
-					case "a", "always":
-						ag.PermResp <- agent.PermissionGrantedAlways
-					default:
-						ag.PermResp <- agent.PermissionDenied
-					}
-				} else {
-					ag.PermResp <- agent.PermissionDenied
-				}
-			case agent.ChunkDone:
-				fmt.Println()
-			case agent.ChunkError:
-				fmt.Fprintf(os.Stderr, "\nerror: %v\n", chunk.Err)
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("reading input: %w", err)
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("running TUI: %w", err)
 	}
 
 	return nil
