@@ -30,6 +30,8 @@ func NewChecker() *Checker {
 			"write": Ask,
 			"edit":  Ask,
 			"bash":  Ask,
+			"glob":  Allow,
+			"grep":  Allow,
 		},
 		sessionAlways: make(map[string]bool),
 	}
