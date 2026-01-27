@@ -7,12 +7,13 @@ import (
 	"log"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/zhubert/looper/internal/permission"
 	"github.com/zhubert/looper/internal/tool"
 )
 
 const (
-	defaultModel    = anthropic.ModelClaude4Sonnet20250514
-	defaultMaxToks  = 8192
+	defaultModel   = anthropic.ModelClaude4Sonnet20250514
+	defaultMaxToks = 8192
 )
 
 // ChunkType identifies the kind of stream chunk.
@@ -22,6 +23,7 @@ const (
 	ChunkText ChunkType = iota
 	ChunkToolUse
 	ChunkToolResult
+	ChunkPermissionRequest
 	ChunkDone
 	ChunkError
 )
@@ -37,22 +39,36 @@ type StreamChunk struct {
 	Err       error
 }
 
+// PermissionResponse is the user's answer to a permission request.
+type PermissionResponse int
+
+const (
+	PermissionGranted      PermissionResponse = iota // Allow this once
+	PermissionDenied                                  // Deny this once
+	PermissionGrantedAlways                           // Allow always for this session
+)
+
 // Agent is the core agentic loop that sends messages to Claude,
 // streams the response, executes tools, and loops until done.
 type Agent struct {
-	client   anthropic.Client
-	registry *tool.Registry
-	conv     *Conversation
-	workDir  string
+	client     anthropic.Client
+	registry   *tool.Registry
+	perms      *permission.Checker
+	conv       *Conversation
+	workDir    string
+	PermResp   chan PermissionResponse
 }
 
-// New creates a new Agent with the given client, registry, and working directory.
-func New(client anthropic.Client, registry *tool.Registry, workDir string) *Agent {
+// New creates a new Agent with the given client, registry, permission checker,
+// and working directory.
+func New(client anthropic.Client, registry *tool.Registry, perms *permission.Checker, workDir string) *Agent {
 	return &Agent{
 		client:   client,
 		registry: registry,
+		perms:    perms,
 		conv:     NewConversation(),
 		workDir:  workDir,
+		PermResp: make(chan PermissionResponse, 1),
 	}
 }
 
@@ -81,7 +97,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 		systemPrompt := BuildSystemPrompt(a.workDir, a.registry)
 
 		stream := a.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     defaultModel,
+			Model:    defaultModel,
 			MaxTokens: defaultMaxToks,
 			System: []anthropic.TextBlockParam{
 				{Text: systemPrompt},
@@ -186,6 +202,16 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 				continue
 			}
 
+			// Check permission before executing.
+			if !a.checkPermission(ctx, ch, tu.name) {
+				result := tool.Result{Output: "permission denied by user", IsError: true}
+				resultBlocks = append(resultBlocks,
+					anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
+				)
+				ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
+				continue
+			}
+
 			result, err := t.Execute(ctx, json.RawMessage(tu.input))
 			if err != nil {
 				log.Printf("tool execution error (%s): %v", tu.name, err)
@@ -201,6 +227,37 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 		a.conv.AddToolResult(resultBlocks...)
 		// Loop continues — Claude will see the tool results.
 	}
+}
+
+// checkPermission evaluates the permission for a tool and, if needed,
+// sends a permission request and blocks until the user responds.
+// Returns true if the tool is allowed to execute.
+func (a *Agent) checkPermission(ctx context.Context, ch chan<- StreamChunk, toolName string) bool {
+	action := a.perms.Check(toolName)
+	switch action {
+	case permission.Allow:
+		return true
+	case permission.Deny:
+		return false
+	case permission.Ask:
+		ch <- StreamChunk{Type: ChunkPermissionRequest, ToolName: toolName}
+
+		select {
+		case resp := <-a.PermResp:
+			switch resp {
+			case PermissionGranted:
+				return true
+			case PermissionGrantedAlways:
+				a.perms.AllowAlways(toolName)
+				return true
+			default:
+				return false
+			}
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return false
 }
 
 type toolUseInfo struct {

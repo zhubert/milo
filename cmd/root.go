@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/zhubert/looper/internal/agent"
+	"github.com/zhubert/looper/internal/permission"
 	"github.com/zhubert/looper/internal/tool"
 )
 
@@ -46,11 +47,13 @@ func runCLI(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	perms := permission.NewChecker()
 	client := anthropic.NewClient()
-	ag := agent.New(client, registry, workDir)
+	ag := agent.New(client, registry, perms, workDir)
 
 	ctx := context.Background()
 	scanner := bufio.NewScanner(os.Stdin)
+	permScanner := bufio.NewScanner(os.Stdin)
 
 	fmt.Println("looper — type a message (ctrl+d to quit)")
 	for {
@@ -82,6 +85,21 @@ func runCLI(cmd *cobra.Command, args []string) error {
 						output = output[:500] + "..."
 					}
 					fmt.Printf("[%s: %s]\n", prefix, output)
+				}
+			case agent.ChunkPermissionRequest:
+				fmt.Printf("\n[permission required for %s] (y)es / (n)o / (a)lways: ", chunk.ToolName)
+				if permScanner.Scan() {
+					answer := strings.TrimSpace(strings.ToLower(permScanner.Text()))
+					switch answer {
+					case "y", "yes":
+						ag.PermResp <- agent.PermissionGranted
+					case "a", "always":
+						ag.PermResp <- agent.PermissionGrantedAlways
+					default:
+						ag.PermResp <- agent.PermissionDenied
+					}
+				} else {
+					ag.PermResp <- agent.PermissionDenied
 				}
 			case agent.ChunkDone:
 				fmt.Println()
