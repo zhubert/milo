@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -19,7 +21,8 @@ func TestNewAgent(t *testing.T) {
 	}
 
 	perms := permission.NewChecker()
-	ag := New(client, registry, perms, "/tmp/test")
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ag := New(client, registry, perms, "/tmp/test", logger)
 	if ag == nil {
 		t.Fatal("expected non-nil agent")
 	}

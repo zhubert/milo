@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/zhubert/looper/internal/agent"
 	"github.com/zhubert/looper/internal/app"
+	"github.com/zhubert/looper/internal/logging"
 	"github.com/zhubert/looper/internal/permission"
 	"github.com/zhubert/looper/internal/tool"
 )
@@ -28,10 +30,22 @@ func Execute() {
 }
 
 func runTUI(cmd *cobra.Command, args []string) error {
+	logger, cleanup, err := logging.Setup()
+	if err != nil {
+		return fmt.Errorf("setting up logging: %w", err)
+	}
+	defer func() {
+		if cerr := cleanup(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "closing log file: %v\n", cerr)
+		}
+	}()
+
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getting working directory: %w", err)
 	}
+
+	logger.Info("starting looper", "work_dir", workDir)
 
 	registry := tool.NewRegistry()
 	tools := []tool.Tool{
@@ -47,8 +61,15 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 
 	perms := permission.NewChecker()
+
+	if os.Getenv("ANTHROPIC_API_KEY") == "" {
+		return errors.New("ANTHROPIC_API_KEY environment variable is not set. " +
+			"Get an API key at https://console.anthropic.com/ and export it:\n\n" +
+			"  export ANTHROPIC_API_KEY=sk-ant-...")
+	}
+
 	client := anthropic.NewClient()
-	ag := agent.New(client, registry, perms, workDir)
+	ag := agent.New(client, registry, perms, workDir, logger)
 
 	m := app.New(ag, workDir)
 	p := tea.NewProgram(m)

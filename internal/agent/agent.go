@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/zhubert/looper/internal/permission"
@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	defaultModel   = anthropic.ModelClaude4Sonnet20250514
+	defaultModel   = anthropic.ModelClaudeSonnet4_20250514
 	defaultMaxToks = 8192
 )
 
@@ -56,18 +56,20 @@ type Agent struct {
 	perms      *permission.Checker
 	conv       *Conversation
 	workDir    string
+	logger     *slog.Logger
 	PermResp   chan PermissionResponse
 }
 
 // New creates a new Agent with the given client, registry, permission checker,
-// and working directory.
-func New(client anthropic.Client, registry *tool.Registry, perms *permission.Checker, workDir string) *Agent {
+// working directory, and logger.
+func New(client anthropic.Client, registry *tool.Registry, perms *permission.Checker, workDir string, logger *slog.Logger) *Agent {
 	return &Agent{
 		client:   client,
 		registry: registry,
 		perms:    perms,
 		conv:     NewConversation(),
 		workDir:  workDir,
+		logger:   logger,
 		PermResp: make(chan PermissionResponse, 1),
 	}
 }
@@ -89,8 +91,12 @@ func (a *Agent) SendMessage(ctx context.Context, userMsg string) <-chan StreamCh
 }
 
 func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
+	a.logger.Info("agent loop started")
+	defer a.logger.Info("agent loop ended")
+
 	for {
 		if ctx.Err() != nil {
+			a.logger.Info("context cancelled, stopping loop")
 			return
 		}
 
@@ -167,6 +173,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 			if ctx.Err() != nil {
 				return
 			}
+			a.logger.Error("stream error", "error", err)
 			ch <- StreamChunk{Type: ChunkError, Err: fmt.Errorf("stream error: %w", err)}
 			return
 		}
@@ -185,6 +192,9 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 		// Execute tools and collect results.
 		var resultBlocks []anthropic.ContentBlockParamUnion
 		for _, tu := range toolUseBlocks {
+			a.logger.Info("tool execution start", "tool", tu.name, "tool_id", tu.id)
+			a.logger.Debug("tool input", "tool", tu.name, "input", tu.input)
+
 			ch <- StreamChunk{
 				Type:      ChunkToolUse,
 				ToolName:  tu.name,
@@ -194,6 +204,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 
 			t := a.registry.Lookup(tu.name)
 			if t == nil {
+				a.logger.Warn("unknown tool", "tool", tu.name)
 				result := tool.Result{Output: fmt.Sprintf("unknown tool: %s", tu.name), IsError: true}
 				resultBlocks = append(resultBlocks,
 					anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
@@ -204,6 +215,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 
 			// Check permission before executing.
 			if !a.checkPermission(ctx, ch, tu.name) {
+				a.logger.Warn("permission denied", "tool", tu.name)
 				result := tool.Result{Output: "permission denied by user", IsError: true}
 				resultBlocks = append(resultBlocks,
 					anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
@@ -214,8 +226,12 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 
 			result, err := t.Execute(ctx, json.RawMessage(tu.input))
 			if err != nil {
-				log.Printf("tool execution error (%s): %v", tu.name, err)
+				a.logger.Error("tool execution error", "tool", tu.name, "error", err)
 				result = tool.Result{Output: fmt.Sprintf("tool execution error: %s", err), IsError: true}
+			}
+
+			if result.IsError {
+				a.logger.Warn("tool returned error result", "tool", tu.name, "output", result.Output)
 			}
 
 			resultBlocks = append(resultBlocks,
