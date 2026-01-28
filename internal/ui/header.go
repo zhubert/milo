@@ -19,7 +19,7 @@ func NewHeader(workDir string) *Header {
 // View renders the header as a string.
 func (h *Header) View() string {
 	ctx := GetViewContext()
-	title := HeaderStyle.Render("looper")
+	title := HeaderStyle.Render("milo")
 	dir := DimStyle.Render(fmt.Sprintf(" %s", h.workDir))
 
 	line := title + dir

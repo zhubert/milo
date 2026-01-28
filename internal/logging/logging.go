@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-// Setup creates a JSON logger that writes to ~/.looper/debug.log.
+// Setup creates a JSON logger that writes to ~/.milo/debug.log.
 // It returns the logger, a cleanup function to close the log file, and any error.
 // The log file is truncated on each session so it reflects only the current run.
 func Setup() (*slog.Logger, func() error, error) {
@@ -16,7 +16,7 @@ func Setup() (*slog.Logger, func() error, error) {
 		return nil, nil, fmt.Errorf("getting home directory: %w", err)
 	}
 
-	dir := filepath.Join(home, ".looper")
+	dir := filepath.Join(home, ".milo")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, nil, fmt.Errorf("creating log directory: %w", err)
 	}

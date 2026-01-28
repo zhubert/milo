@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zhubert/looper/internal/tool"
+	"github.com/zhubert/milo/internal/tool"
 )
 
 func TestBuildSystemPrompt(t *testing.T) {

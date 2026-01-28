@@ -9,15 +9,15 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/spf13/cobra"
 
-	"github.com/zhubert/looper/internal/agent"
-	"github.com/zhubert/looper/internal/app"
-	"github.com/zhubert/looper/internal/logging"
-	"github.com/zhubert/looper/internal/permission"
-	"github.com/zhubert/looper/internal/tool"
+	"github.com/zhubert/milo/internal/agent"
+	"github.com/zhubert/milo/internal/app"
+	"github.com/zhubert/milo/internal/logging"
+	"github.com/zhubert/milo/internal/permission"
+	"github.com/zhubert/milo/internal/tool"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "looper",
+	Use:   "milo",
 	Short: "A coding agent powered by Claude",
 	RunE:  runTUI,
 }
@@ -45,7 +45,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting working directory: %w", err)
 	}
 
-	logger.Info("starting looper", "work_dir", workDir)
+	logger.Info("starting milo", "work_dir", workDir)
 
 	registry := tool.NewRegistry()
 	tools := []tool.Tool{

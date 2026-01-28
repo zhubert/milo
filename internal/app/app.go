@@ -5,11 +5,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/zhubert/looper/internal/agent"
-	"github.com/zhubert/looper/internal/ui"
+	"github.com/zhubert/milo/internal/agent"
+	"github.com/zhubert/milo/internal/ui"
 )
 
-// Model is the top-level bubbletea model for the looper TUI.
+// Model is the top-level bubbletea model for the milo TUI.
 type Model struct {
 	agent  *agent.Agent
 	header *ui.Header

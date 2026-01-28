@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/zhubert/looper/internal/agent"
-	"github.com/zhubert/looper/internal/ui"
+	"github.com/zhubert/milo/internal/agent"
+	"github.com/zhubert/milo/internal/ui"
 )
 
 // Update implements tea.Model.

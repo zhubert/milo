@@ -1,4 +1,4 @@
-module github.com/zhubert/looper
+module github.com/zhubert/milo
 
 go 1.25.4
 
