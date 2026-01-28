@@ -214,7 +214,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 			}
 
 			// Check permission before executing.
-			if !a.checkPermission(ctx, ch, tu.name) {
+			if !a.checkPermission(ctx, ch, tu.name, json.RawMessage(tu.input)) {
 				a.logger.Warn("permission denied", "tool", tu.name)
 				result := tool.Result{Output: "permission denied by user", IsError: true}
 				resultBlocks = append(resultBlocks,
@@ -248,15 +248,15 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 // checkPermission evaluates the permission for a tool and, if needed,
 // sends a permission request and blocks until the user responds.
 // Returns true if the tool is allowed to execute.
-func (a *Agent) checkPermission(ctx context.Context, ch chan<- StreamChunk, toolName string) bool {
-	action := a.perms.Check(toolName)
+func (a *Agent) checkPermission(ctx context.Context, ch chan<- StreamChunk, toolName string, toolInput json.RawMessage) bool {
+	action := a.perms.Check(toolName, toolInput)
 	switch action {
 	case permission.Allow:
 		return true
 	case permission.Deny:
 		return false
 	case permission.Ask:
-		ch <- StreamChunk{Type: ChunkPermissionRequest, ToolName: toolName}
+		ch <- StreamChunk{Type: ChunkPermissionRequest, ToolName: toolName, ToolInput: string(toolInput)}
 
 		select {
 		case resp := <-a.PermResp:
@@ -264,7 +264,7 @@ func (a *Agent) checkPermission(ctx context.Context, ch chan<- StreamChunk, tool
 			case PermissionGranted:
 				return true
 			case PermissionGrantedAlways:
-				a.perms.AllowAlways(toolName)
+				a.perms.AllowAlways(toolName, toolInput)
 				return true
 			default:
 				return false

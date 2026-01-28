@@ -1,6 +1,8 @@
 module github.com/zhubert/milo
 
-go 1.25.4
+go 1.24.2
+
+toolchain go1.24.7
 
 require (
 	charm.land/bubbles/v2 v2.0.0-rc.1
