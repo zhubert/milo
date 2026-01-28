@@ -423,7 +423,8 @@ func TestSpecificityOrdering(t *testing.T) {
 	t.Parallel()
 
 	c := &Checker{
-		rules:         make([]Rule, 0),
+		defaultRules:  make([]Rule, 0),
+		customRules:   make(map[string]Rule),
 		sessionAlways: make(map[string]bool),
 		defaultAction: Ask,
 	}

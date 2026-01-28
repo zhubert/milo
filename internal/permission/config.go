@@ -61,6 +61,9 @@ func (c *Checker) LoadFromFile(path string) (int, error) {
 }
 
 func (c *Checker) loadFromConfig(cfg *Config) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	loaded := 0
 	for i, rc := range cfg.Rules {
 		if rc.Tool == "" {
@@ -78,11 +81,12 @@ func (c *Checker) loadFromConfig(cfg *Config) (int, error) {
 			return loaded, fmt.Errorf("rule %d: %w", i, err)
 		}
 
-		c.AddRule(Rule{
+		rule := Rule{
 			Tool:    rc.Tool,
 			Pattern: rc.Pattern,
 			Action:  action,
-		})
+		}
+		c.customRules[rule.Key()] = rule
 		loaded++
 	}
 
@@ -114,10 +118,62 @@ func (c *Checker) LoadGlobal() (int, error) {
 	return c.LoadFromFile(path)
 }
 
+// SaveToDirectory saves custom rules to .milo/permissions.yaml in the given directory.
+func (c *Checker) SaveToDirectory(dir string) error {
+	c.mu.RLock()
+	rules := make([]Rule, 0, len(c.customRules))
+	for _, rule := range c.customRules {
+		rules = append(rules, rule)
+	}
+	c.mu.RUnlock()
+
+	// Build config
+	cfg := Config{
+		Rules: make([]RuleConfig, 0, len(rules)),
+	}
+	for _, rule := range rules {
+		cfg.Rules = append(cfg.Rules, RuleConfig{
+			Tool:    rule.Tool,
+			Pattern: rule.Pattern,
+			Action:  rule.Action.String(),
+		})
+	}
+
+	// Create directory if needed
+	miloDir := filepath.Join(dir, ".milo")
+	if err := os.MkdirAll(miloDir, 0755); err != nil {
+		return fmt.Errorf("creating .milo directory: %w", err)
+	}
+
+	// Marshal to YAML
+	data, err := yaml.Marshal(&cfg)
+	if err != nil {
+		return fmt.Errorf("marshaling config: %w", err)
+	}
+
+	// Write file
+	path := filepath.Join(miloDir, "permissions.yaml")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("writing config file: %w", err)
+	}
+
+	return nil
+}
+
+// Save saves custom rules to the config file in the current working directory.
+func (c *Checker) Save() error {
+	workDir := c.WorkDir()
+	if workDir == "" {
+		return fmt.Errorf("no working directory set")
+	}
+	return c.SaveToDirectory(workDir)
+}
+
 // NewCheckerWithConfig creates a new Checker and loads rules from config files.
 // It loads in order: global config, then repo config (repo rules take precedence).
 func NewCheckerWithConfig(workDir string) (*Checker, error) {
 	c := NewChecker()
+	c.workDir = workDir
 
 	// Load global config first (lower precedence)
 	if _, err := c.LoadGlobal(); err != nil {

@@ -74,6 +74,11 @@ func New(client anthropic.Client, registry *tool.Registry, perms *permission.Che
 	}
 }
 
+// Permissions returns the permission checker for this agent.
+func (a *Agent) Permissions() *permission.Checker {
+	return a.perms
+}
+
 // SendMessage starts the agentic loop for the given user message.
 // It returns a channel that emits StreamChunks as the response is generated.
 // The channel is closed when the loop completes.
@@ -264,7 +269,9 @@ func (a *Agent) checkPermission(ctx context.Context, ch chan<- StreamChunk, tool
 			case PermissionGranted:
 				return true
 			case PermissionGrantedAlways:
-				a.perms.AllowAlways(toolName, toolInput)
+				if err := a.perms.AllowAlways(toolName, toolInput); err != nil {
+					a.logger.Warn("failed to persist permission", "error", err)
+				}
 				return true
 			default:
 				return false
