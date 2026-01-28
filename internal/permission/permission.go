@@ -158,13 +158,9 @@ func (r *Rule) Matches(toolName, input string) bool {
 		}
 	}
 
-	// For command patterns, try prefix matching
-	// Supports both "git *" and "git:*" syntax
-	if toolName == "bash" && strings.HasSuffix(r.Pattern, "*") {
-		prefix := strings.TrimSuffix(r.Pattern, "*")
-		// Also handle colon syntax: "git:*" means "starts with git"
-		prefix = strings.TrimSuffix(prefix, ":")
-		prefix = strings.TrimSuffix(prefix, " ")
+	// For command patterns with colon syntax: "git:*" means "starts with git"
+	if toolName == "bash" && strings.HasSuffix(r.Pattern, ":*") {
+		prefix := strings.TrimSuffix(r.Pattern, ":*")
 		if strings.HasPrefix(input, prefix) {
 			return true
 		}
@@ -273,18 +269,14 @@ func (c *Checker) addDefaultRules() {
 	}
 
 	// Dangerous patterns that should always be denied
+	// Use :* suffix for prefix matching
 	dangerousPatterns := []string{
-		"rm -rf /*",
-		"rm -rf .*",
-		"chmod -R 777*",
-		":(){ :|:& };:*", // fork bomb
-		"> /dev/sd*",
-		"dd if=*of=/dev/*",
-		"mkfs*",
-		"wget * | sh*",
-		"curl * | sh*",
-		"wget * | bash*",
-		"curl * | bash*",
+		"rm -rf /:*",
+		"rm -rf .:*",
+		"chmod -R 777:*",
+		":(){ :|:& };::*", // fork bomb
+		"> /dev/sd:*",
+		"mkfs:*",
 	}
 
 	for _, pattern := range dangerousPatterns {

@@ -331,7 +331,7 @@ func TestSaveToDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	c := NewChecker()
-	c.AddRule(Rule{Tool: "bash", Pattern: "npm *", Action: Allow})
+	c.AddRule(Rule{Tool: "bash", Pattern: "npm:*", Action: Allow})
 	c.AddRule(Rule{Tool: "bash", Pattern: "make*", Action: Allow})
 
 	if err := c.SaveToDirectory(tmpDir); err != nil {
@@ -427,20 +427,20 @@ func TestRulesAreUnique(t *testing.T) {
 	c := NewChecker()
 
 	// Add the same rule twice
-	c.AddRule(Rule{Tool: "bash", Pattern: "npm *", Action: Allow})
-	c.AddRule(Rule{Tool: "bash", Pattern: "npm *", Action: Deny})
+	c.AddRule(Rule{Tool: "bash", Pattern: "npm:*", Action: Allow})
+	c.AddRule(Rule{Tool: "bash", Pattern: "npm:*", Action: Deny})
 
 	// Should only have one rule with that key
 	rules := c.CustomRules()
 	count := 0
 	for _, r := range rules {
-		if r.Tool == "bash" && r.Pattern == "npm *" {
+		if r.Tool == "bash" && r.Pattern == "npm:*" {
 			count++
 		}
 	}
 
 	if count != 1 {
-		t.Errorf("expected 1 rule with key bash:npm *, got %d", count)
+		t.Errorf("expected 1 rule with key bash:npm:*, got %d", count)
 	}
 
 	// The second (Deny) should have replaced the first
@@ -454,7 +454,7 @@ func TestRemoveRule(t *testing.T) {
 	t.Parallel()
 
 	c := NewChecker()
-	c.AddRule(Rule{Tool: "bash", Pattern: "npm *", Action: Allow})
+	c.AddRule(Rule{Tool: "bash", Pattern: "npm:*", Action: Allow})
 
 	// Verify rule exists
 	input := makeInput(map[string]interface{}{"command": "npm install"})
@@ -463,7 +463,7 @@ func TestRemoveRule(t *testing.T) {
 	}
 
 	// Remove it
-	if !c.RemoveRule("bash:npm *") {
+	if !c.RemoveRule("bash:npm:*") {
 		t.Error("RemoveRule should return true for existing rule")
 	}
 
@@ -473,7 +473,7 @@ func TestRemoveRule(t *testing.T) {
 	}
 
 	// Removing again should return false
-	if c.RemoveRule("bash:npm *") {
+	if c.RemoveRule("bash:npm:*") {
 		t.Error("RemoveRule should return false for non-existent rule")
 	}
 }

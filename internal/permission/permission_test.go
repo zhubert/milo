@@ -63,14 +63,14 @@ func TestRuleMatches(t *testing.T) {
 		},
 		{
 			name:     "prefix pattern for bash",
-			rule:     Rule{Tool: "bash", Pattern: "git *", Action: Allow},
+			rule:     Rule{Tool: "bash", Pattern: "git:*", Action: Allow},
 			toolName: "bash",
 			input:    "git status",
 			want:     true,
 		},
 		{
 			name:     "prefix pattern mismatch",
-			rule:     Rule{Tool: "bash", Pattern: "git *", Action: Allow},
+			rule:     Rule{Tool: "bash", Pattern: "git:*", Action: Allow},
 			toolName: "bash",
 			input:    "npm install",
 			want:     false,
@@ -369,7 +369,7 @@ func TestAddRule(t *testing.T) {
 	}
 
 	// Add a rule to allow npm commands
-	c.AddRule(Rule{Tool: "bash", Pattern: "npm *", Action: Allow})
+	c.AddRule(Rule{Tool: "bash", Pattern: "npm:*", Action: Allow})
 
 	// Now it should be allowed
 	if got := c.Check("bash", input); got != Allow {
@@ -431,10 +431,10 @@ func TestSpecificityOrdering(t *testing.T) {
 
 	// Add rules in non-specificity order
 	c.AddRule(Rule{Tool: "bash", Pattern: "*", Action: Ask})           // Less specific
-	c.AddRule(Rule{Tool: "bash", Pattern: "git *", Action: Allow})     // More specific
+	c.AddRule(Rule{Tool: "bash", Pattern: "git:*", Action: Allow})     // More specific
 	c.AddRule(Rule{Tool: "bash", Pattern: "git push*", Action: Deny})  // Most specific
 
-	// git status should match "git *" (Allow)
+	// git status should match "git:*" (Allow)
 	input1 := makeInput(map[string]interface{}{"command": "git status"})
 	if got := c.Check("bash", input1); got != Allow {
 		t.Errorf("git status should be allowed, got %v", got)
