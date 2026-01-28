@@ -21,8 +21,7 @@ func FlashTick() tea.Cmd {
 
 // Footer renders the bottom bar with keybindings and optional flash messages.
 type Footer struct {
-	flash    string
-	showPerm bool
+	flash string
 }
 
 // NewFooter creates a new footer.
@@ -40,11 +39,6 @@ func (f *Footer) ClearFlash() {
 	f.flash = ""
 }
 
-// SetPermissionMode enables the permission prompt display.
-func (f *Footer) SetPermissionMode(on bool) {
-	f.showPerm = on
-}
-
 // View renders the footer as a string.
 func (f *Footer) View() string {
 	ctx := GetViewContext()
@@ -52,14 +46,9 @@ func (f *Footer) View() string {
 	var content string
 	if f.flash != "" {
 		content = f.flash
-	} else if f.showPerm {
-		content = FooterStyle.Render("y") + DimStyle.Render("es  ") +
-			FooterStyle.Render("n") + DimStyle.Render("o  ") +
-			FooterStyle.Render("a") + DimStyle.Render("lways")
 	} else {
-		content = DimStyle.Render("enter") + FooterStyle.Render(" send  ") +
-			DimStyle.Render("esc") + FooterStyle.Render(" cancel  ") +
-			DimStyle.Render("ctrl+c") + FooterStyle.Render(" quit")
+		content = FooterStyle.Render("esc") + DimStyle.Render(" cancel  ") +
+			FooterStyle.Render("ctrl+c") + DimStyle.Render(" quit")
 	}
 
 	padding := ctx.TerminalWidth - lipgloss.Width(content)

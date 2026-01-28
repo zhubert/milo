@@ -8,7 +8,6 @@ import (
 // View implements tea.Model.
 func (m *Model) View() tea.View {
 	var v tea.View
-	v.AltScreen = true
 
 	if m.quitting {
 		v.SetContent("Goodbye.\n")

@@ -9,7 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-const inputHeight = 3
+const maxInputHeight = 2
 
 // chatMessage stores a rendered message in the history.
 type chatMessage struct {
@@ -25,21 +25,41 @@ type Chat struct {
 	height   int
 	focused  bool
 
-	messages  []chatMessage
-	streaming string // accumulates current assistant response
-	spinner   *SpinnerState
-	waiting   bool // true after sending, before first token
+	maxVPHeight int // maximum viewport height based on terminal size
+
+	welcomeContent string // logo and info shown initially
+	messages       []chatMessage
+	streaming      string // accumulates current assistant response
+	spinner        *SpinnerState
+	waiting        bool // true after sending, before first token
+
+	permissionMode bool   // true when waiting for permission response
+	permToolName   string // tool name for permission prompt
 }
 
 // NewChat creates a new chat component.
 func NewChat() *Chat {
 	ti := textarea.New()
-	ti.Placeholder = "Type a message..."
+	ti.Prompt = "> "
+	ti.Placeholder = "Try \"create a function that...\""
 	ti.CharLimit = 0
 	ti.ShowLineNumbers = false
+	ti.SetHeight(1)
+	ti.MaxHeight = maxInputHeight
+	
+	// Apply custom styling to use terminal's default background
+	styles := ti.Styles()
+	styles.Focused.Base = styles.Focused.Base.Background(lipgloss.NoColor{})
+	styles.Focused.CursorLine = styles.Focused.CursorLine.Background(lipgloss.NoColor{})
+	styles.Focused.Text = styles.Focused.Text.Background(lipgloss.NoColor{})
+	styles.Blurred.Base = styles.Blurred.Base.Background(lipgloss.NoColor{})
+	styles.Blurred.CursorLine = styles.Blurred.CursorLine.Background(lipgloss.NoColor{})
+	styles.Blurred.Text = styles.Blurred.Text.Background(lipgloss.NoColor{})
+	ti.SetStyles(styles)
 	ti.Focus()
 
 	vp := viewport.New()
+	vp.SoftWrap = true
 
 	return &Chat{
 		viewport: vp,
@@ -53,14 +73,15 @@ func (c *Chat) SetSize(width, height int) {
 	c.width = width
 	c.height = height
 
-	vpHeight := height - inputHeight
-	if vpHeight < 1 {
-		vpHeight = 1
+	// Max viewport height (leaving room for input area).
+	c.maxVPHeight = height - maxInputHeight - 2
+	if c.maxVPHeight < 1 {
+		c.maxVPHeight = 1
 	}
 
 	c.viewport.SetWidth(width)
-	c.viewport.SetHeight(vpHeight)
 	c.input.SetWidth(width - 2)
+	c.input.MaxHeight = maxInputHeight
 
 	c.updateContent()
 }
@@ -189,16 +210,54 @@ func (c *Chat) Update(msg tea.Msg) (*Chat, tea.Cmd) {
 	return c, tea.Batch(cmds...)
 }
 
+// SetPermissionMode enables/disables the permission prompt display.
+func (c *Chat) SetPermissionMode(on bool, toolName string) {
+	c.permissionMode = on
+	c.permToolName = toolName
+}
+
 // View renders the chat component.
 func (c *Chat) View() string {
 	vpView := c.viewport.View()
 	inputView := c.input.View()
 
-	return lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
+	// Create horizontal line for input borders with dark color.
+	lineStyle := lipgloss.NewStyle().Foreground(ColorLineDark)
+	line := lineStyle.Render(strings.Repeat("─", c.width))
+
+	// Build permission prompt if active.
+	var permPrompt string
+	if c.permissionMode {
+		permPrompt = c.renderPermissionPrompt()
+	}
+
+	if permPrompt != "" {
+		return lipgloss.JoinVertical(lipgloss.Left, vpView, line, permPrompt, inputView, line)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, vpView, line, inputView, line)
+}
+
+func (c *Chat) renderPermissionPrompt() string {
+	label := lipgloss.NewStyle().Bold(true).Foreground(ColorPrimary).Render("Allow " + c.permToolName + "?")
+	keys := FooterStyle.Render("y") + DimStyle.Render("es  ") +
+		FooterStyle.Render("n") + DimStyle.Render("o  ") +
+		FooterStyle.Render("a") + DimStyle.Render("lways")
+	return label + "  " + keys
+}
+
+// SetWelcomeContent sets the welcome content (logo/info) to show initially.
+func (c *Chat) SetWelcomeContent(content string) {
+	c.welcomeContent = content
+	c.updateContent()
 }
 
 func (c *Chat) updateContent() {
 	var parts []string
+
+	// Always show welcome content at the top (scrolls up as messages arrive).
+	if c.welcomeContent != "" {
+		parts = append(parts, c.welcomeContent)
+	}
 
 	for _, msg := range c.messages {
 		parts = append(parts, msg.content)
@@ -216,7 +275,19 @@ func (c *Chat) updateContent() {
 		parts = append(parts, c.spinner.RenderSpinner(verb))
 	}
 
-	content := strings.Join(parts, "\n")
+	content := strings.Join(parts, "\n\n")
+
+	// Size viewport based on content, up to max height.
+	contentLines := strings.Count(content, "\n") + 1
+	vpHeight := contentLines
+	if vpHeight > c.maxVPHeight {
+		vpHeight = c.maxVPHeight
+	}
+	if vpHeight < 1 {
+		vpHeight = 1
+	}
+	c.viewport.SetHeight(vpHeight)
+
 	c.viewport.SetContent(content)
 	c.viewport.GotoBottom()
 }

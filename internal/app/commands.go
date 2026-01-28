@@ -37,7 +37,10 @@ func (m *Model) handleHelpCommand() tea.Cmd {
     list                    - Show all custom rules
     add <rule>              - Add a rule, e.g. Bash(git:*)
     remove <rule>           - Remove a rule
-  /help, /h, /?            - Show this help message`
+  /help, /h, /?            - Show this help message
+  
+  Special commands:
+  exit, quit               - Close the application`
 	m.chat.AddSystemMessage(help)
 	return nil
 }

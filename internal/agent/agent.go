@@ -13,9 +13,15 @@ import (
 )
 
 const (
-	defaultModel   = anthropic.ModelClaudeSonnet4_20250514
+	// Model is the Claude model used by the agent.
+	Model          = anthropic.ModelClaudeSonnet4_20250514
 	defaultMaxToks = 8192
 )
+
+// ModelDisplayName returns a human-readable name for the current model.
+func ModelDisplayName() string {
+	return "Claude Sonnet 4"
+}
 
 // ChunkType identifies the kind of stream chunk.
 type ChunkType int
@@ -123,7 +129,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 		systemPrompt := BuildSystemPrompt(a.workDir, a.registry)
 
 		stream := a.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:    defaultModel,
+			Model:    Model,
 			MaxTokens: defaultMaxToks,
 			System: []anthropic.TextBlockParam{
 				{Text: systemPrompt},

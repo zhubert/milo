@@ -148,7 +148,7 @@ func RenderToolUse(name, input string) string {
 		input = input[:100] + "..."
 	}
 	detail := DimStyle.Render(input)
-	return label + " " + detail + "\n"
+	return "\n" + label + " " + detail + "\n"
 }
 
 // RenderToolResult formats a tool execution result.

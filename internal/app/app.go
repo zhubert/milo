@@ -36,11 +36,15 @@ type Model struct {
 
 // New creates the root app model.
 func New(ag *agent.Agent, workDir string) *Model {
+	header := ui.NewHeader(workDir)
+	chat := ui.NewChat()
+	chat.SetWelcomeContent(header.WelcomeContent())
+
 	return &Model{
 		agent:  ag,
-		header: ui.NewHeader(workDir),
+		header: header,
 		footer: ui.NewFooter(),
-		chat:   ui.NewChat(),
+		chat:   chat,
 	}
 }
 

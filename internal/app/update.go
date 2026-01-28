@@ -48,6 +48,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				text := strings.TrimSpace(m.chat.InputValue())
 				if text != "" {
 					m.chat.ResetInput()
+					// Check for exit command
+					if strings.ToLower(text) == "exit" || strings.ToLower(text) == "quit" {
+						m.quitting = true
+						return m, tea.Quit
+					}
 					// Check for slash commands
 					if strings.HasPrefix(text, "/") {
 						cmds = append(cmds, m.handleSlashCommand(text))
@@ -119,7 +124,7 @@ func (m *Model) handleStreamChunk(chunk agent.StreamChunk) tea.Cmd {
 	case agent.ChunkPermissionRequest:
 		m.permPending = true
 		m.permToolName = chunk.ToolName
-		m.footer.SetPermissionMode(true)
+		m.chat.SetPermissionMode(true, chunk.ToolName)
 		m.chat.Blur()
 		// Don't listen for next chunk yet — we block the agent goroutine
 		// until the user responds.
@@ -165,7 +170,7 @@ func (m *Model) handlePermissionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	m.permPending = false
 	m.permToolName = ""
-	m.footer.SetPermissionMode(false)
+	m.chat.SetPermissionMode(false, "")
 
 	// Send permission response to the agent (non-blocking).
 	m.agent.PermResp <- resp
