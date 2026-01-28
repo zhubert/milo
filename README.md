@@ -18,10 +18,10 @@ A coding agent is a loop that alternates between asking an LLM "what should I do
 │  (the core)  │  built-in tools  │  allow/deny/ask   │
 ├──────────────┴──────────────────┴───────────────────┤
 │              LLM Provider Abstraction               │
-│         Anthropic, OpenAI, Google, etc.             │
+│         Anthropic, for now                          │
 ├─────────────────────────────────────────────────────┤
 │              Supporting Infrastructure              │
-│  Config, Storage, LSP, File Watcher, Plugins, Bus   │
+│  Config, others in progress                         │
 └─────────────────────────────────────────────────────┘
 ```
 
