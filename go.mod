@@ -10,6 +10,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251106192539-4b304240aab7
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/spf13/cobra v1.10.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
