@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/zhubert/milo/internal/loopdetector"
 	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/tool"
 )
@@ -55,6 +56,7 @@ type Agent struct {
 	registry   *tool.Registry
 	perms      *permission.Checker
 	conv       *Conversation
+	detector   *loopdetector.Detector
 	workDir    string
 	logger     *slog.Logger
 	PermResp   chan PermissionResponse
@@ -68,6 +70,7 @@ func New(client anthropic.Client, registry *tool.Registry, perms *permission.Che
 		registry: registry,
 		perms:    perms,
 		conv:     NewConversation(),
+		detector: loopdetector.NewWithDefaults(),
 		workDir:  workDir,
 		logger:   logger,
 		PermResp: make(chan PermissionResponse, 1),
@@ -81,6 +84,7 @@ func (a *Agent) SendMessage(ctx context.Context, userMsg string) <-chan StreamCh
 	ch := make(chan StreamChunk, 64)
 
 	a.conv.AddUserMessage(userMsg)
+	a.detector.Reset() // Reset doom loop detector for new request
 
 	go func() {
 		defer close(ch)
@@ -97,6 +101,17 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 	for {
 		if ctx.Err() != nil {
 			a.logger.Info("context cancelled, stopping loop")
+			return
+		}
+
+		// Record and check for doom loop at start of each iteration
+		a.detector.RecordIteration()
+		if detection := a.detector.Check(); detection.Detected {
+			a.logger.Warn("doom loop detected", "reason", detection.Reason, "iterations", a.detector.Iterations())
+			ch <- StreamChunk{
+				Type: ChunkError,
+				Err:  fmt.Errorf("doom loop detected: %s", detection.Reason),
+			}
 			return
 		}
 
@@ -209,6 +224,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 				resultBlocks = append(resultBlocks,
 					anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
 				)
+				a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
 				ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
 				continue
 			}
@@ -220,6 +236,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 				resultBlocks = append(resultBlocks,
 					anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
 				)
+				a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
 				ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
 				continue
 			}
@@ -237,7 +254,18 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 			resultBlocks = append(resultBlocks,
 				anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
 			)
+			a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
 			ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
+		}
+
+		// Check for doom loop after processing all tool calls
+		if detection := a.detector.Check(); detection.Detected {
+			a.logger.Warn("doom loop detected after tool execution", "reason", detection.Reason, "iterations", a.detector.Iterations())
+			ch <- StreamChunk{
+				Type: ChunkError,
+				Err:  fmt.Errorf("doom loop detected: %s", detection.Reason),
+			}
+			return
 		}
 
 		a.conv.AddToolResult(resultBlocks...)
