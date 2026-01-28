@@ -48,9 +48,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				text := strings.TrimSpace(m.chat.InputValue())
 				if text != "" {
 					m.chat.ResetInput()
-					cmds = append(cmds, func() tea.Msg {
-						return SendMsg{Text: text}
-					})
+					// Check for slash commands
+					if strings.HasPrefix(text, "/") {
+						cmds = append(cmds, m.handleSlashCommand(text))
+					} else {
+						cmds = append(cmds, func() tea.Msg {
+							return SendMsg{Text: text}
+						})
+					}
 				}
 			}
 		}

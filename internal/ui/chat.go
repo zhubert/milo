@@ -119,6 +119,13 @@ func (c *Chat) AddErrorMessage(text string) {
 	c.updateContent()
 }
 
+// AddSystemMessage appends a system message to the history.
+func (c *Chat) AddSystemMessage(text string) {
+	rendered := RenderSystemMessage(text)
+	c.messages = append(c.messages, chatMessage{role: "system", content: rendered})
+	c.updateContent()
+}
+
 // AppendStreaming appends text to the current streaming response.
 func (c *Chat) AppendStreaming(text string) {
 	if c.waiting {

@@ -1,6 +1,8 @@
 module github.com/zhubert/milo
 
-go 1.25.4
+go 1.24.2
+
+toolchain go1.24.7
 
 require (
 	charm.land/bubbles/v2 v2.0.0-rc.1
@@ -8,6 +10,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251106192539-4b304240aab7
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/spf13/cobra v1.10.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

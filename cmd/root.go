@@ -62,7 +62,10 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	perms := permission.NewChecker()
+	perms, err := permission.NewCheckerWithConfig(workDir)
+	if err != nil {
+		return fmt.Errorf("setting up permissions: %w", err)
+	}
 
 	if os.Getenv("ANTHROPIC_API_KEY") == "" {
 		return errors.New("ANTHROPIC_API_KEY environment variable is not set. " +

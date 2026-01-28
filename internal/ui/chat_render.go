@@ -190,3 +190,9 @@ func RenderUserMessage(text string) string {
 func RenderAssistantLabel() string {
 	return lipgloss.NewStyle().Bold(true).Foreground(ColorPrimary).Render("Claude") + "\n"
 }
+
+// RenderSystemMessage formats a system message (for command output).
+func RenderSystemMessage(text string) string {
+	label := lipgloss.NewStyle().Bold(true).Foreground(ColorDim).Render("System")
+	return label + "\n" + text + "\n"
+}
