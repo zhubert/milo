@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/zhubert/looper/internal/agent"
+	"github.com/zhubert/milo/internal/agent"
 )
 
 // StreamChunkMsg wraps an agent StreamChunk as a bubbletea message.

@@ -3,7 +3,7 @@ package app
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/zhubert/looper/internal/agent"
+	"github.com/zhubert/milo/internal/agent"
 )
 
 // listenForChunks returns a command that reads from the agent's stream channel

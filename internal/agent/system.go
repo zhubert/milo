@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zhubert/looper/internal/tool"
+	"github.com/zhubert/milo/internal/tool"
 )
 
 // BuildSystemPrompt constructs the system prompt for the agent,

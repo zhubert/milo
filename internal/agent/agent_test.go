@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/zhubert/looper/internal/permission"
-	"github.com/zhubert/looper/internal/tool"
+	"github.com/zhubert/milo/internal/permission"
+	"github.com/zhubert/milo/internal/tool"
 )
 
 func TestNewAgent(t *testing.T) {

@@ -1,6 +1,6 @@
 package main
 
-import "github.com/zhubert/looper/cmd"
+import "github.com/zhubert/milo/cmd"
 
 func main() {
 	cmd.Execute()
