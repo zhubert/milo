@@ -35,8 +35,8 @@ func (m *Model) handleHelpCommand() tea.Cmd {
 	help := `Available commands:
   /permissions, /perms, /p  - Manage permission rules
     list                    - Show all custom rules
-    add <tool> <pattern> [action] - Add a rule (default: allow)
-    remove <tool:pattern>   - Remove a rule
+    add <rule>              - Add a rule, e.g. Bash(npm *)
+    remove <rule>           - Remove a rule
   /help, /h, /?            - Show this help message`
 	m.chat.AddSystemMessage(help)
 	return nil
@@ -48,16 +48,15 @@ func (m *Model) handlePermissionsCommand(args []string) tea.Cmd {
 	if len(args) == 0 {
 		// Show help for permissions command
 		help := `Permission commands:
-  /permissions list              - Show all custom rules
-  /permissions add <tool> <pattern> [action]
-                                - Add a rule (default: allow)
-  /permissions remove <key>     - Remove a rule by key (tool:pattern)
+  /permissions list           - Show all custom rules
+  /permissions add <rule>     - Add a rule (default: allow)
+  /permissions remove <rule>  - Remove a rule
 
 Examples:
-  /permissions add bash "npm *"
-  /permissions add bash "go build*"
-  /permissions add bash "rm -rf*" deny
-  /permissions remove bash:npm *`
+  /p add Bash(npm *)
+  /p add Bash(go build*)
+  /p add Bash(rm -rf *):deny
+  /p remove Bash(npm *)`
 		m.chat.AddSystemMessage(help)
 		return nil
 	}
@@ -88,43 +87,26 @@ func (m *Model) listPermissions(perms *permission.Checker) tea.Cmd {
 	var sb strings.Builder
 	sb.WriteString("Custom permission rules:\n")
 	for _, rule := range rules {
-		sb.WriteString(fmt.Sprintf("  %s:%s → %s\n", rule.Tool, rule.Pattern, rule.Action))
+		sb.WriteString(fmt.Sprintf("  %s\n", rule.String()))
 	}
 	m.chat.AddSystemMessage(sb.String())
 	return nil
 }
 
 func (m *Model) addPermission(perms *permission.Checker, args []string) tea.Cmd {
-	if len(args) < 2 {
-		m.chat.AddSystemMessage("Usage: /permissions add <tool> <pattern> [action]")
+	if len(args) < 1 {
+		m.chat.AddSystemMessage("Usage: /permissions add <rule>\nExample: /p add Bash(npm *)")
 		return nil
 	}
 
-	toolName := args[0]
-	pattern := args[1]
-
-	// Default to allow if no action specified
-	action := permission.Allow
-	if len(args) >= 3 {
-		actionStr := strings.ToLower(args[2])
-		switch actionStr {
-		case "allow":
-			action = permission.Allow
-		case "deny":
-			action = permission.Deny
-		case "ask":
-			action = permission.Ask
-		default:
-			m.chat.AddSystemMessage(fmt.Sprintf("Invalid action %q. Must be allow, deny, or ask.", actionStr))
-			return nil
-		}
+	// Join all args to handle rules with spaces
+	ruleStr := strings.Join(args, " ")
+	rule, err := permission.ParseRule(ruleStr)
+	if err != nil {
+		m.chat.AddSystemMessage(fmt.Sprintf("Invalid rule: %v", err))
+		return nil
 	}
 
-	rule := permission.Rule{
-		Tool:    toolName,
-		Pattern: pattern,
-		Action:  action,
-	}
 	perms.AddRule(rule)
 
 	// Save to config
@@ -134,22 +116,25 @@ func (m *Model) addPermission(perms *permission.Checker, args []string) tea.Cmd 
 		m.footer.SetFlash(ui.SuccessStyle.Render("Rule added and saved"))
 	}
 
-	m.chat.AddSystemMessage(fmt.Sprintf("Added rule: %s:%s → %s", toolName, pattern, action))
+	m.chat.AddSystemMessage(fmt.Sprintf("Added rule: %s", rule.String()))
 	return ui.FlashTick()
 }
 
 func (m *Model) removePermission(perms *permission.Checker, args []string) tea.Cmd {
 	if len(args) < 1 {
-		m.chat.AddSystemMessage("Usage: /permissions remove <tool:pattern>")
+		m.chat.AddSystemMessage("Usage: /permissions remove <rule>\nExample: /p remove Bash(npm *)")
 		return nil
 	}
 
-	key := args[0]
-	// If they provided tool and pattern separately, join them
-	if len(args) >= 2 && !strings.Contains(args[0], ":") {
-		key = args[0] + ":" + args[1]
+	// Join all args to handle rules with spaces
+	ruleStr := strings.Join(args, " ")
+	rule, err := permission.ParseRule(ruleStr)
+	if err != nil {
+		m.chat.AddSystemMessage(fmt.Sprintf("Invalid rule: %v", err))
+		return nil
 	}
 
+	key := rule.Key()
 	if perms.RemoveRule(key) {
 		// Save to config
 		if err := perms.Save(); err != nil {
@@ -157,9 +142,9 @@ func (m *Model) removePermission(perms *permission.Checker, args []string) tea.C
 		} else {
 			m.footer.SetFlash(ui.SuccessStyle.Render("Rule removed and saved"))
 		}
-		m.chat.AddSystemMessage(fmt.Sprintf("Removed rule: %s", key))
+		m.chat.AddSystemMessage(fmt.Sprintf("Removed rule: %s", rule.String()))
 	} else {
-		m.chat.AddSystemMessage(fmt.Sprintf("Rule not found: %s", key))
+		m.chat.AddSystemMessage(fmt.Sprintf("Rule not found: %s", rule.String()))
 	}
 	return ui.FlashTick()
 }

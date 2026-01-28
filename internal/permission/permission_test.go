@@ -587,3 +587,145 @@ func TestConcurrentAccess(t *testing.T) {
 		<-done
 	}
 }
+
+func TestRuleString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		rule Rule
+		want string
+	}{
+		{
+			rule: Rule{Tool: "bash", Pattern: "npm *", Action: Allow},
+			want: "bash(npm *)",
+		},
+		{
+			rule: Rule{Tool: "bash", Pattern: "rm -rf *", Action: Deny},
+			want: "bash(rm -rf *):deny",
+		},
+		{
+			rule: Rule{Tool: "write", Pattern: "*.tmp", Action: Ask},
+			want: "write(*.tmp):ask",
+		},
+		{
+			rule: Rule{Tool: "read", Pattern: "*", Action: Allow},
+			want: "read(*)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+			got := tt.rule.String()
+			if got != tt.want {
+				t.Errorf("Rule.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseRule(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input   string
+		want    Rule
+		wantErr bool
+	}{
+		{
+			input: "bash(npm *)",
+			want:  Rule{Tool: "bash", Pattern: "npm *", Action: Allow},
+		},
+		{
+			input: "Bash(npm *)",
+			want:  Rule{Tool: "bash", Pattern: "npm *", Action: Allow},
+		},
+		{
+			input: "bash(rm -rf *):deny",
+			want:  Rule{Tool: "bash", Pattern: "rm -rf *", Action: Deny},
+		},
+		{
+			input: "write(*.tmp):ask",
+			want:  Rule{Tool: "write", Pattern: "*.tmp", Action: Ask},
+		},
+		{
+			input: "read(*)",
+			want:  Rule{Tool: "read", Pattern: "*", Action: Allow},
+		},
+		{
+			input: "bash()",
+			want:  Rule{Tool: "bash", Pattern: "*", Action: Allow},
+		},
+		{
+			input: "bash(go build ./...):allow",
+			want:  Rule{Tool: "bash", Pattern: "go build ./...", Action: Allow},
+		},
+		{
+			input:   "",
+			wantErr: true,
+		},
+		{
+			input:   "invalid",
+			wantErr: true,
+		},
+		{
+			input:   "(npm *)",
+			wantErr: true,
+		},
+		{
+			input:   "bash(npm *",
+			wantErr: true,
+		},
+		{
+			input:   "bash(*):invalid",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+			got, err := ParseRule(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseRule(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				if got.Tool != tt.want.Tool {
+					t.Errorf("ParseRule(%q).Tool = %q, want %q", tt.input, got.Tool, tt.want.Tool)
+				}
+				if got.Pattern != tt.want.Pattern {
+					t.Errorf("ParseRule(%q).Pattern = %q, want %q", tt.input, got.Pattern, tt.want.Pattern)
+				}
+				if got.Action != tt.want.Action {
+					t.Errorf("ParseRule(%q).Action = %v, want %v", tt.input, got.Action, tt.want.Action)
+				}
+			}
+		})
+	}
+}
+
+func TestParseRuleRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	rules := []Rule{
+		{Tool: "bash", Pattern: "npm *", Action: Allow},
+		{Tool: "bash", Pattern: "rm -rf *", Action: Deny},
+		{Tool: "write", Pattern: "*.tmp", Action: Ask},
+		{Tool: "read", Pattern: "*", Action: Allow},
+	}
+
+	for _, rule := range rules {
+		t.Run(rule.String(), func(t *testing.T) {
+			t.Parallel()
+			str := rule.String()
+			parsed, err := ParseRule(str)
+			if err != nil {
+				t.Fatalf("ParseRule(%q) error = %v", str, err)
+			}
+			if parsed.Tool != rule.Tool || parsed.Pattern != rule.Pattern || parsed.Action != rule.Action {
+				t.Errorf("Round trip failed: %+v -> %q -> %+v", rule, str, parsed)
+			}
+		})
+	}
+}

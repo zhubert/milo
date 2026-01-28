@@ -10,14 +10,7 @@ import (
 
 // Config represents the structure of a permissions config file.
 type Config struct {
-	Rules []RuleConfig `yaml:"rules"`
-}
-
-// RuleConfig represents a rule in the config file.
-type RuleConfig struct {
-	Tool    string `yaml:"tool"`
-	Pattern string `yaml:"pattern"`
-	Action  string `yaml:"action"`
+	Rules []string `yaml:"rules"`
 }
 
 // parseAction converts a string action to an Action type.
@@ -65,26 +58,10 @@ func (c *Checker) loadFromConfig(cfg *Config) (int, error) {
 	defer c.mu.Unlock()
 
 	loaded := 0
-	for i, rc := range cfg.Rules {
-		if rc.Tool == "" {
-			return loaded, fmt.Errorf("rule %d: tool is required", i)
-		}
-		if rc.Pattern == "" {
-			rc.Pattern = "*"
-		}
-		if rc.Action == "" {
-			rc.Action = "ask"
-		}
-
-		action, err := parseAction(rc.Action)
+	for i, ruleStr := range cfg.Rules {
+		rule, err := ParseRule(ruleStr)
 		if err != nil {
 			return loaded, fmt.Errorf("rule %d: %w", i, err)
-		}
-
-		rule := Rule{
-			Tool:    rc.Tool,
-			Pattern: rc.Pattern,
-			Action:  action,
 		}
 		c.customRules[rule.Key()] = rule
 		loaded++
@@ -121,22 +98,15 @@ func (c *Checker) LoadGlobal() (int, error) {
 // SaveToDirectory saves custom rules to .milo/permissions.yaml in the given directory.
 func (c *Checker) SaveToDirectory(dir string) error {
 	c.mu.RLock()
-	rules := make([]Rule, 0, len(c.customRules))
+	rules := make([]string, 0, len(c.customRules))
 	for _, rule := range c.customRules {
-		rules = append(rules, rule)
+		rules = append(rules, rule.String())
 	}
 	c.mu.RUnlock()
 
 	// Build config
 	cfg := Config{
-		Rules: make([]RuleConfig, 0, len(rules)),
-	}
-	for _, rule := range rules {
-		cfg.Rules = append(cfg.Rules, RuleConfig{
-			Tool:    rule.Tool,
-			Pattern: rule.Pattern,
-			Action:  rule.Action.String(),
-		})
+		Rules: rules,
 	}
 
 	// Create directory if needed

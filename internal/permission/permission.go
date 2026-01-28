@@ -2,6 +2,7 @@ package permission
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -55,6 +56,72 @@ type Rule struct {
 // Key returns a unique identifier for this rule (tool:pattern).
 func (r *Rule) Key() string {
 	return r.Tool + ":" + r.Pattern
+}
+
+// String returns the compact format: Tool(pattern) or Tool(pattern):action
+// For allow (the default), the action suffix is omitted.
+func (r *Rule) String() string {
+	if r.Action == Allow {
+		return fmt.Sprintf("%s(%s)", r.Tool, r.Pattern)
+	}
+	return fmt.Sprintf("%s(%s):%s", r.Tool, r.Pattern, r.Action.String())
+}
+
+// ParseRule parses a compact rule string like "Bash(npm *)" or "Bash(rm -rf *):deny"
+// into a Rule. If no action is specified, it defaults to Allow.
+func ParseRule(s string) (Rule, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return Rule{}, fmt.Errorf("empty rule string")
+	}
+
+	// Find the opening parenthesis
+	openParen := strings.Index(s, "(")
+	if openParen == -1 {
+		return Rule{}, fmt.Errorf("invalid rule format %q: missing '('", s)
+	}
+
+	// Find the closing parenthesis
+	closeParen := strings.LastIndex(s, ")")
+	if closeParen == -1 || closeParen < openParen {
+		return Rule{}, fmt.Errorf("invalid rule format %q: missing ')'", s)
+	}
+
+	tool := strings.TrimSpace(s[:openParen])
+	if tool == "" {
+		return Rule{}, fmt.Errorf("invalid rule format %q: missing tool name", s)
+	}
+
+	pattern := s[openParen+1 : closeParen]
+	if pattern == "" {
+		pattern = "*"
+	}
+
+	// Check for action suffix after the closing paren
+	action := Allow // default
+	remainder := strings.TrimSpace(s[closeParen+1:])
+	if remainder != "" {
+		if !strings.HasPrefix(remainder, ":") {
+			return Rule{}, fmt.Errorf("invalid rule format %q: expected ':action' after ')'", s)
+		}
+		actionStr := strings.TrimPrefix(remainder, ":")
+		switch strings.ToLower(actionStr) {
+		case "allow":
+			action = Allow
+		case "deny":
+			action = Deny
+		case "ask":
+			action = Ask
+		default:
+			return Rule{}, fmt.Errorf("invalid action %q in rule %q", actionStr, s)
+		}
+	}
+
+	return Rule{
+		Tool:    strings.ToLower(tool),
+		Pattern: pattern,
+		Action:  action,
+	}, nil
 }
 
 // Matches checks if this rule matches the given tool name and input.

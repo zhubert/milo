@@ -44,15 +44,9 @@ func TestLoadConfig(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
 	configContent := `rules:
-  - tool: bash
-    pattern: "npm *"
-    action: allow
-  - tool: write
-    pattern: "*.tmp"
-    action: allow
-  - tool: bash
-    pattern: "rm -rf*"
-    action: deny
+  - bash(npm *)
+  - write(*.tmp)
+  - bash(rm -rf*):deny
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -68,8 +62,8 @@ func TestLoadConfig(t *testing.T) {
 	}
 
 	// Verify first rule
-	if cfg.Rules[0].Tool != "bash" || cfg.Rules[0].Pattern != "npm *" || cfg.Rules[0].Action != "allow" {
-		t.Errorf("first rule mismatch: %+v", cfg.Rules[0])
+	if cfg.Rules[0] != "bash(npm *)" {
+		t.Errorf("first rule mismatch: %s", cfg.Rules[0])
 	}
 }
 
@@ -105,12 +99,8 @@ func TestCheckerLoadFromFile(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
 	configContent := `rules:
-  - tool: bash
-    pattern: "npm install"
-    action: allow
-  - tool: bash
-    pattern: "yarn *"
-    action: allow
+  - bash(npm install)
+  - bash(yarn *)
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -144,9 +134,9 @@ func TestCheckerLoadFromFileWithDefaults(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
-	// Config with missing pattern and action - should use defaults
+	// Config with empty pattern - should use * default
 	configContent := `rules:
-  - tool: bash
+  - bash()
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -170,9 +160,7 @@ func TestCheckerLoadFromFileInvalidAction(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
 	configContent := `rules:
-  - tool: bash
-    pattern: "*"
-    action: invalid_action
+  - bash(*):invalid_action
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -191,9 +179,9 @@ func TestCheckerLoadFromFileMissingTool(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
+	// Invalid format: missing tool name
 	configContent := `rules:
-  - pattern: "*"
-    action: allow
+  - (*)
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -216,9 +204,7 @@ func TestCheckerLoadFromDirectory(t *testing.T) {
 	}
 
 	configContent := `rules:
-  - tool: bash
-    pattern: "make test"
-    action: allow
+  - bash(make test)
 `
 	configPath := filepath.Join(miloDir, "permissions.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -267,9 +253,7 @@ func TestNewCheckerWithConfig(t *testing.T) {
 	}
 
 	configContent := `rules:
-  - tool: bash
-    pattern: "docker *"
-    action: allow
+  - bash(docker *)
 `
 	configPath := filepath.Join(miloDir, "permissions.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -322,9 +306,7 @@ func TestConfigRulesPrecedence(t *testing.T) {
 
 	// Config that allows go build (which defaults to Ask)
 	configContent := `rules:
-  - tool: bash
-    pattern: "go build*"
-    action: allow
+  - bash(go build*)
 `
 	configPath := filepath.Join(miloDir, "permissions.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
