@@ -49,9 +49,11 @@ milo/
 │   ├── agent/        # The agentic loop implementation
 │   ├── app/          # Application orchestration
 │   ├── logging/      # Structured logging via log/slog
+│   ├── loopdetector/ # Doom loop detection (stuck agent patterns)
 │   ├── permission/   # Permission system for tool execution
 │   ├── tool/         # Tool definitions and registry
-│   └── ui/           # Terminal UI (Bubble Tea)
+│   ├── ui/           # Terminal UI (Bubble Tea)
+│   └── version/      # Build version information
 ├── main.go           # Entry point
 └── go.mod
 ```
