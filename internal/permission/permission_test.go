@@ -596,20 +596,20 @@ func TestRuleString(t *testing.T) {
 		want string
 	}{
 		{
-			rule: Rule{Tool: "bash", Pattern: "npm *", Action: Allow},
-			want: "bash(npm *)",
+			rule: Rule{Tool: "bash", Pattern: "npm:*", Action: Allow},
+			want: "Bash(npm:*)",
 		},
 		{
 			rule: Rule{Tool: "bash", Pattern: "rm -rf *", Action: Deny},
-			want: "bash(rm -rf *):deny",
+			want: "Bash(rm -rf *):deny",
 		},
 		{
 			rule: Rule{Tool: "write", Pattern: "*.tmp", Action: Ask},
-			want: "write(*.tmp):ask",
+			want: "Write(*.tmp):ask",
 		},
 		{
 			rule: Rule{Tool: "read", Pattern: "*", Action: Allow},
-			want: "read(*)",
+			want: "Read(*)",
 		},
 	}
 
@@ -624,6 +624,37 @@ func TestRuleString(t *testing.T) {
 	}
 }
 
+func TestColonPatternSyntax(t *testing.T) {
+	t.Parallel()
+
+	c := NewChecker()
+
+	// Add rule with colon syntax: git:* means "starts with git"
+	c.AddRule(Rule{Tool: "bash", Pattern: "git:*", Action: Allow})
+
+	tests := []struct {
+		command string
+		want    Action
+	}{
+		{"git status", Allow},
+		{"git commit -m test", Allow},
+		{"git push origin main", Allow},
+		{"gitconfig", Allow}, // Also matches since it starts with "git"
+		{"npm install", Ask}, // Doesn't match
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			t.Parallel()
+			input := makeInput(map[string]interface{}{"command": tt.command})
+			got := c.Check("bash", input)
+			if got != tt.want {
+				t.Errorf("Check(%q) = %v, want %v", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseRule(t *testing.T) {
 	t.Parallel()
 
@@ -633,31 +664,31 @@ func TestParseRule(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			input: "bash(npm *)",
-			want:  Rule{Tool: "bash", Pattern: "npm *", Action: Allow},
+			input: "Bash(git:*)",
+			want:  Rule{Tool: "bash", Pattern: "git:*", Action: Allow},
 		},
 		{
-			input: "Bash(npm *)",
-			want:  Rule{Tool: "bash", Pattern: "npm *", Action: Allow},
+			input: "bash(npm:*)",
+			want:  Rule{Tool: "bash", Pattern: "npm:*", Action: Allow},
 		},
 		{
-			input: "bash(rm -rf *):deny",
+			input: "Bash(rm -rf *):deny",
 			want:  Rule{Tool: "bash", Pattern: "rm -rf *", Action: Deny},
 		},
 		{
-			input: "write(*.tmp):ask",
+			input: "Write(*.tmp):ask",
 			want:  Rule{Tool: "write", Pattern: "*.tmp", Action: Ask},
 		},
 		{
-			input: "read(*)",
+			input: "Read(*)",
 			want:  Rule{Tool: "read", Pattern: "*", Action: Allow},
 		},
 		{
-			input: "bash()",
+			input: "Bash()",
 			want:  Rule{Tool: "bash", Pattern: "*", Action: Allow},
 		},
 		{
-			input: "bash(go build ./...):allow",
+			input: "Bash(go build ./...):allow",
 			want:  Rule{Tool: "bash", Pattern: "go build ./...", Action: Allow},
 		},
 		{
@@ -669,15 +700,15 @@ func TestParseRule(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			input:   "(npm *)",
+			input:   "(npm:*)",
 			wantErr: true,
 		},
 		{
-			input:   "bash(npm *",
+			input:   "Bash(npm:*",
 			wantErr: true,
 		},
 		{
-			input:   "bash(*):invalid",
+			input:   "Bash(*):invalid",
 			wantErr: true,
 		},
 	}
@@ -709,10 +740,11 @@ func TestParseRuleRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	rules := []Rule{
-		{Tool: "bash", Pattern: "npm *", Action: Allow},
+		{Tool: "bash", Pattern: "npm:*", Action: Allow},
 		{Tool: "bash", Pattern: "rm -rf *", Action: Deny},
 		{Tool: "write", Pattern: "*.tmp", Action: Ask},
 		{Tool: "read", Pattern: "*", Action: Allow},
+		{Tool: "bash", Pattern: "git:*", Action: Allow},
 	}
 
 	for _, rule := range rules {

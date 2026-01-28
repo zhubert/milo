@@ -44,9 +44,9 @@ func TestLoadConfig(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
 	configContent := `rules:
-  - bash(npm *)
-  - write(*.tmp)
-  - bash(rm -rf*):deny
+  - Bash(npm:*)
+  - Write(*.tmp)
+  - Bash(rm -rf *):deny
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -62,7 +62,7 @@ func TestLoadConfig(t *testing.T) {
 	}
 
 	// Verify first rule
-	if cfg.Rules[0] != "bash(npm *)" {
+	if cfg.Rules[0] != "Bash(npm:*)" {
 		t.Errorf("first rule mismatch: %s", cfg.Rules[0])
 	}
 }
@@ -99,8 +99,8 @@ func TestCheckerLoadFromFile(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
 	configContent := `rules:
-  - bash(npm install)
-  - bash(yarn *)
+  - Bash(npm install)
+  - Bash(yarn:*)
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -136,7 +136,7 @@ func TestCheckerLoadFromFileWithDefaults(t *testing.T) {
 
 	// Config with empty pattern - should use * default
 	configContent := `rules:
-  - bash()
+  - Bash()
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -160,7 +160,7 @@ func TestCheckerLoadFromFileInvalidAction(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
 	configContent := `rules:
-  - bash(*):invalid_action
+  - Bash(*):invalid_action
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -204,7 +204,7 @@ func TestCheckerLoadFromDirectory(t *testing.T) {
 	}
 
 	configContent := `rules:
-  - bash(make test)
+  - Bash(make test)
 `
 	configPath := filepath.Join(miloDir, "permissions.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -253,7 +253,7 @@ func TestNewCheckerWithConfig(t *testing.T) {
 	}
 
 	configContent := `rules:
-  - bash(docker *)
+  - Bash(docker:*)
 `
 	configPath := filepath.Join(miloDir, "permissions.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -306,7 +306,7 @@ func TestConfigRulesPrecedence(t *testing.T) {
 
 	// Config that allows go build (which defaults to Ask)
 	configContent := `rules:
-  - bash(go build*)
+  - Bash(go build:*)
 `
 	configPath := filepath.Join(miloDir, "permissions.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {

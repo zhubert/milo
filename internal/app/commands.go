@@ -35,7 +35,7 @@ func (m *Model) handleHelpCommand() tea.Cmd {
 	help := `Available commands:
   /permissions, /perms, /p  - Manage permission rules
     list                    - Show all custom rules
-    add <rule>              - Add a rule, e.g. Bash(npm *)
+    add <rule>              - Add a rule, e.g. Bash(git:*)
     remove <rule>           - Remove a rule
   /help, /h, /?            - Show this help message`
 	m.chat.AddSystemMessage(help)
@@ -53,10 +53,10 @@ func (m *Model) handlePermissionsCommand(args []string) tea.Cmd {
   /permissions remove <rule>  - Remove a rule
 
 Examples:
-  /p add Bash(npm *)
-  /p add Bash(go build*)
+  /p add Bash(npm:*)
+  /p add Bash(go build:*)
   /p add Bash(rm -rf *):deny
-  /p remove Bash(npm *)`
+  /p remove Bash(npm:*)`
 		m.chat.AddSystemMessage(help)
 		return nil
 	}

@@ -60,11 +60,14 @@ func (r *Rule) Key() string {
 
 // String returns the compact format: Tool(pattern) or Tool(pattern):action
 // For allow (the default), the action suffix is omitted.
+// Tool names are capitalized (Bash, Read, Write).
 func (r *Rule) String() string {
+	// Capitalize tool name
+	tool := strings.Title(r.Tool)
 	if r.Action == Allow {
-		return fmt.Sprintf("%s(%s)", r.Tool, r.Pattern)
+		return fmt.Sprintf("%s(%s)", tool, r.Pattern)
 	}
-	return fmt.Sprintf("%s(%s):%s", r.Tool, r.Pattern, r.Action.String())
+	return fmt.Sprintf("%s(%s):%s", tool, r.Pattern, r.Action.String())
 }
 
 // ParseRule parses a compact rule string like "Bash(npm *)" or "Bash(rm -rf *):deny"
@@ -155,9 +158,13 @@ func (r *Rule) Matches(toolName, input string) bool {
 		}
 	}
 
-	// For command patterns, try prefix matching (e.g., "git *" matches "git status")
+	// For command patterns, try prefix matching
+	// Supports both "git *" and "git:*" syntax
 	if toolName == "bash" && strings.HasSuffix(r.Pattern, "*") {
 		prefix := strings.TrimSuffix(r.Pattern, "*")
+		// Also handle colon syntax: "git:*" means "starts with git"
+		prefix = strings.TrimSuffix(prefix, ":")
+		prefix = strings.TrimSuffix(prefix, " ")
 		if strings.HasPrefix(input, prefix) {
 			return true
 		}
