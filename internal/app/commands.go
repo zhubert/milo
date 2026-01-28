@@ -35,7 +35,7 @@ func (m *Model) handleHelpCommand() tea.Cmd {
 	help := `Available commands:
   /permissions, /perms, /p  - Manage permission rules
     list                    - Show all custom rules
-    add <tool> <pattern> <action> - Add a rule
+    add <tool> <pattern> [action] - Add a rule (default: allow)
     remove <tool:pattern>   - Remove a rule
   /help, /h, /?            - Show this help message`
 	m.chat.AddSystemMessage(help)
@@ -49,13 +49,14 @@ func (m *Model) handlePermissionsCommand(args []string) tea.Cmd {
 		// Show help for permissions command
 		help := `Permission commands:
   /permissions list              - Show all custom rules
-  /permissions add <tool> <pattern> <action>
-                                - Add a rule (action: allow, deny, ask)
+  /permissions add <tool> <pattern> [action]
+                                - Add a rule (default: allow)
   /permissions remove <key>     - Remove a rule by key (tool:pattern)
 
 Examples:
-  /permissions add bash "npm *" allow
-  /permissions add bash "go build*" allow
+  /permissions add bash "npm *"
+  /permissions add bash "go build*"
+  /permissions add bash "rm -rf*" deny
   /permissions remove bash:npm *`
 		m.chat.AddSystemMessage(help)
 		return nil
@@ -94,26 +95,29 @@ func (m *Model) listPermissions(perms *permission.Checker) tea.Cmd {
 }
 
 func (m *Model) addPermission(perms *permission.Checker, args []string) tea.Cmd {
-	if len(args) < 3 {
-		m.chat.AddSystemMessage("Usage: /permissions add <tool> <pattern> <action>")
+	if len(args) < 2 {
+		m.chat.AddSystemMessage("Usage: /permissions add <tool> <pattern> [action]")
 		return nil
 	}
 
 	toolName := args[0]
 	pattern := args[1]
-	actionStr := strings.ToLower(args[2])
 
-	var action permission.Action
-	switch actionStr {
-	case "allow":
-		action = permission.Allow
-	case "deny":
-		action = permission.Deny
-	case "ask":
-		action = permission.Ask
-	default:
-		m.chat.AddSystemMessage(fmt.Sprintf("Invalid action %q. Must be allow, deny, or ask.", actionStr))
-		return nil
+	// Default to allow if no action specified
+	action := permission.Allow
+	if len(args) >= 3 {
+		actionStr := strings.ToLower(args[2])
+		switch actionStr {
+		case "allow":
+			action = permission.Allow
+		case "deny":
+			action = permission.Deny
+		case "ask":
+			action = permission.Ask
+		default:
+			m.chat.AddSystemMessage(fmt.Sprintf("Invalid action %q. Must be allow, deny, or ask.", actionStr))
+			return nil
+		}
 	}
 
 	rule := permission.Rule{
