@@ -3,10 +3,10 @@ package ui
 import (
 	"strings"
 
-	"charm.land/bubbles/v2/textarea"
-	"charm.land/bubbles/v2/viewport"
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 const maxInputHeight = 2
@@ -46,20 +46,18 @@ func NewChat() *Chat {
 	ti.ShowLineNumbers = false
 	ti.SetHeight(1)
 	ti.MaxHeight = maxInputHeight
-	
-	// Apply custom styling to use terminal's default background
-	styles := ti.Styles()
-	styles.Focused.Base = styles.Focused.Base.Background(lipgloss.NoColor{})
-	styles.Focused.CursorLine = styles.Focused.CursorLine.Background(lipgloss.NoColor{})
-	styles.Focused.Text = styles.Focused.Text.Background(lipgloss.NoColor{})
-	styles.Blurred.Base = styles.Blurred.Base.Background(lipgloss.NoColor{})
-	styles.Blurred.CursorLine = styles.Blurred.CursorLine.Background(lipgloss.NoColor{})
-	styles.Blurred.Text = styles.Blurred.Text.Background(lipgloss.NoColor{})
-	ti.SetStyles(styles)
+
+	// Remove background styling to use terminal's default
+	ti.FocusedStyle.Base = lipgloss.NewStyle()
+	ti.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ti.FocusedStyle.Text = lipgloss.NewStyle()
+	ti.BlurredStyle.Base = lipgloss.NewStyle()
+	ti.BlurredStyle.CursorLine = lipgloss.NewStyle()
+	ti.BlurredStyle.Text = lipgloss.NewStyle()
+
 	ti.Focus()
 
-	vp := viewport.New()
-	vp.SoftWrap = true
+	vp := viewport.New(80, 20)
 
 	return &Chat{
 		viewport: vp,
@@ -79,7 +77,7 @@ func (c *Chat) SetSize(width, height int) {
 		c.maxVPHeight = 1
 	}
 
-	c.viewport.SetWidth(width)
+	c.viewport.Width = width
 	c.input.SetWidth(width - 2)
 	c.input.MaxHeight = maxInputHeight
 
@@ -232,7 +230,7 @@ func (c *Chat) View() string {
 	}
 
 	if permPrompt != "" {
-		return lipgloss.JoinVertical(lipgloss.Left, vpView, line, permPrompt, inputView, line)
+		return lipgloss.JoinVertical(lipgloss.Left, vpView, permPrompt, line, inputView, line)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, vpView, line, inputView, line)
 }
@@ -263,10 +261,17 @@ func (c *Chat) updateContent() {
 		parts = append(parts, msg.content)
 	}
 
-	// Show streaming content with live markdown render.
+	// Show streaming content, rendering only complete sections.
+	// Incomplete parts are buffered until a newline arrives.
 	if c.streaming != "" {
-		rendered := RenderAssistantLabel() + RenderMarkdown(c.streaming, c.width-4)
-		parts = append(parts, rendered)
+		complete, _ := splitCompleteMarkdown(c.streaming)
+		if complete != "" {
+			rendered := RenderAssistantLabel() + RenderMarkdown(complete, c.width-4)
+			parts = append(parts, rendered)
+		} else {
+			// Show label with spinner-like indicator while buffering
+			parts = append(parts, RenderAssistantLabel()+DimStyle.Render("..."))
+		}
 	}
 
 	// Show spinner if waiting.
@@ -286,8 +291,34 @@ func (c *Chat) updateContent() {
 	if vpHeight < 1 {
 		vpHeight = 1
 	}
-	c.viewport.SetHeight(vpHeight)
+	c.viewport.Height = vpHeight
 
 	c.viewport.SetContent(content)
 	c.viewport.GotoBottom()
+}
+
+// splitCompleteMarkdown splits streaming content into complete (renderable)
+// and incomplete (raw) parts. This prevents markdown flashing during streaming.
+func splitCompleteMarkdown(content string) (complete, incomplete string) {
+	// Count code block fences to see if we're inside an unclosed block
+	fenceCount := strings.Count(content, "```")
+	inCodeBlock := fenceCount%2 == 1
+
+	if inCodeBlock {
+		// Find the last opening fence and don't render anything after it
+		lastFence := strings.LastIndex(content, "```")
+		if lastFence > 0 {
+			return content[:lastFence], content[lastFence:]
+		}
+		return "", content
+	}
+
+	// Not in a code block - split at the last newline
+	lastNewline := strings.LastIndex(content, "\n")
+	if lastNewline == -1 {
+		// No newlines yet, everything is incomplete
+		return "", content
+	}
+
+	return content[:lastNewline+1], content[lastNewline+1:]
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/zhubert/milo/internal/agent"
 	"github.com/zhubert/milo/internal/ui"
@@ -22,7 +22,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ctx.UpdateTerminalSize(msg.Width, msg.Height)
 		m.chat.SetSize(msg.Width, ctx.ContentHeight)
 
-	case tea.KeyPressMsg:
+	case tea.KeyMsg:
 		// Handle permission prompt keys first.
 		if m.permPending {
 			return m.handlePermissionKey(msg)
@@ -34,7 +34,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 
-		case "escape":
+		case "esc":
 			if m.streaming {
 				m.cancelStream()
 				m.chat.FinishStreaming()
@@ -152,7 +152,7 @@ func (m *Model) handleStreamChunk(chunk agent.StreamChunk) tea.Cmd {
 	return nil
 }
 
-func (m *Model) handlePermissionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handlePermissionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var resp agent.PermissionResponse
 
 	switch msg.String() {
@@ -162,7 +162,7 @@ func (m *Model) handlePermissionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		resp = agent.PermissionGrantedAlways
 	case "n":
 		resp = agent.PermissionDenied
-	case "escape", "ctrl+c":
+	case "esc", "ctrl+c":
 		resp = agent.PermissionDenied
 	default:
 		return m, nil // Ignore other keys.
@@ -173,7 +173,7 @@ func (m *Model) handlePermissionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.chat.SetPermissionMode(false, "")
 
 	// Send permission response to the agent (non-blocking).
-	m.agent.PermResp <- resp
+	m.agent.(*agent.Agent).PermResp <- resp
 
 	// Resume listening for chunks and refocus input.
 	return m, tea.Batch(listenForChunks(m.streamCh), m.chat.Focus())

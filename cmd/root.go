@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/pprof"
 
-	tea "charm.land/bubbletea/v2"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/spf13/cobra"
 
@@ -17,11 +18,17 @@ import (
 	"github.com/zhubert/milo/internal/version"
 )
 
+var cpuprofile string
+
 var rootCmd = &cobra.Command{
 	Use:     "milo",
 	Short:   "A coding agent powered by Claude",
 	Version: version.Version,
 	RunE:    runTUI,
+}
+
+func init() {
+	rootCmd.Flags().StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
 }
 
 // Execute runs the root command.
@@ -32,6 +39,19 @@ func Execute() {
 }
 
 func runTUI(cmd *cobra.Command, args []string) error {
+	// Start CPU profiling if requested
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			return fmt.Errorf("creating CPU profile: %w", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			return fmt.Errorf("starting CPU profile: %w", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
 	logger, cleanup, err := logging.Setup()
 	if err != nil {
 		return fmt.Errorf("setting up logging: %w", err)
@@ -79,7 +99,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	ag := agent.New(client, registry, perms, workDir, logger)
 
 	m := app.New(ag, workDir)
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("running TUI: %w", err)

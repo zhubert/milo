@@ -1,10 +1,9 @@
 package ui
 
 import (
-	"image/color"
 	"strings"
 
-	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/zhubert/milo/internal/agent"
 	"github.com/zhubert/milo/internal/version"
@@ -66,12 +65,12 @@ func (h *Header) WelcomeContent() string {
 	}
 
 	// Build info lines.
-	line1 := versionStyle.Render("v"+version.Version)
+	line1 := versionStyle.Render("v" + version.Version)
 	line2 := infoStyle.Render(agent.ModelDisplayName())
 	line3 := DimStyle.Render(displayDir)
 
 	// Build logo column with synthwave gradient.
-	colors := []color.Color{logoColor1, logoColor2, logoColor3}
+	colors := []lipgloss.TerminalColor{logoColor1, logoColor2, logoColor3}
 	var logoLines []string
 	for i, l := range logo {
 		style := lipgloss.NewStyle().Foreground(colors[i%len(colors)])

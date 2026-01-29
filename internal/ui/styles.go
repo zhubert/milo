@@ -1,17 +1,17 @@
 package ui
 
-import "charm.land/lipgloss/v2"
+import "github.com/charmbracelet/lipgloss"
 
 // Color palette.
 var (
-	ColorPrimary   = lipgloss.Color("#7C3AED")
-	ColorDim       = lipgloss.Color("#6B7280")
-	ColorText      = lipgloss.Color("#E5E7EB")
-	ColorBorder    = lipgloss.Color("#374151")
-	ColorLineDark  = lipgloss.Color("#1F2937")
-	ColorError     = lipgloss.Color("#EF4444")
-	ColorSuccess   = lipgloss.Color("#10B981")
-	ColorToolName  = lipgloss.Color("#06B6D4")
+	ColorPrimary  = lipgloss.Color("#7C3AED")
+	ColorDim      = lipgloss.Color("#6B7280")
+	ColorText     = lipgloss.Color("#E5E7EB")
+	ColorBorder   = lipgloss.Color("#374151")
+	ColorLineDark = lipgloss.Color("#374151")
+	ColorError    = lipgloss.Color("#EF4444")
+	ColorSuccess  = lipgloss.Color("#10B981")
+	ColorToolName = lipgloss.Color("#06B6D4")
 )
 
 // Styles.
@@ -45,5 +45,5 @@ var (
 			Foreground(ColorText)
 
 	TextareaFocusedStyle = lipgloss.NewStyle().
-			Foreground(ColorText)
+				Foreground(ColorText)
 )

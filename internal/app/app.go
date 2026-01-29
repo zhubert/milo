@@ -3,15 +3,23 @@ package app
 import (
 	"context"
 
-	tea "charm.land/bubbletea/v2"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/zhubert/milo/internal/agent"
+	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/ui"
 )
 
+// AgentInterface defines the interface that the app needs from an agent.
+type AgentInterface interface {
+	ModelDisplayName() string
+	Permissions() *permission.Checker
+	SendMessage(ctx context.Context, msg string) <-chan agent.StreamChunk
+}
+
 // Model is the top-level bubbletea model for the milo TUI.
 type Model struct {
-	agent  *agent.Agent
+	agent  AgentInterface
 	header *ui.Header
 	footer *ui.Footer
 	chat   *ui.Chat
@@ -35,7 +43,7 @@ type Model struct {
 }
 
 // New creates the root app model.
-func New(ag *agent.Agent, workDir string) *Model {
+func New(ag AgentInterface, workDir string) *Model {
 	header := ui.NewHeader(workDir)
 	chat := ui.NewChat()
 	chat.SetWelcomeContent(header.WelcomeContent())

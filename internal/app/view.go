@@ -1,24 +1,16 @@
 package app
 
-import (
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
-)
+import "github.com/charmbracelet/lipgloss"
 
 // View implements tea.Model.
-func (m *Model) View() tea.View {
-	var v tea.View
-
+func (m *Model) View() string {
 	if m.quitting {
-		v.SetContent("Goodbye.\n")
-		return v
+		return "Goodbye.\n"
 	}
 
 	header := m.header.View()
 	footer := m.footer.View()
 	chatView := m.chat.View()
 
-	view := lipgloss.JoinVertical(lipgloss.Left, header, chatView, footer)
-	v.SetContent(view)
-	return v
+	return lipgloss.JoinVertical(lipgloss.Left, header, chatView, footer)
 }

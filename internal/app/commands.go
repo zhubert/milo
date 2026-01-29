@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/ui"
@@ -38,7 +38,7 @@ func (m *Model) handleHelpCommand() tea.Cmd {
     add <rule>              - Add a rule, e.g. Bash(git:*)
     remove <rule>           - Remove a rule
   /help, /h, /?            - Show this help message
-  
+
   Special commands:
   exit, quit               - Close the application`
 	m.chat.AddSystemMessage(help)

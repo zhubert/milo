@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // StopwatchTickMsg advances the spinner animation.
