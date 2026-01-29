@@ -36,6 +36,13 @@ const (
 	ChunkError
 )
 
+// Usage tracks token consumption for a single API turn.
+type Usage struct {
+	Model        string
+	InputTokens  int64
+	OutputTokens int64
+}
+
 // StreamChunk is a unit of output from the agent's streaming loop.
 type StreamChunk struct {
 	Type             ChunkType
@@ -46,6 +53,7 @@ type StreamChunk struct {
 	Result           *tool.Result
 	Err              error
 	ParallelProgress *tool.ProgressUpdate // For ChunkParallelProgress
+	Usage            *Usage               // For ChunkDone - token usage for this turn
 }
 
 // PermissionResponse is the user's answer to a permission request.
@@ -119,6 +127,9 @@ func (a *Agent) SendMessage(ctx context.Context, userMsg string) <-chan StreamCh
 func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 	a.logger.Info("agent loop started")
 	defer a.logger.Info("agent loop ended")
+
+	// Accumulate token usage across all API calls in this agent turn.
+	var totalInputTokens, totalOutputTokens int64
 
 	for {
 		if ctx.Err() != nil {
@@ -203,6 +214,11 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 
 			case "message_delta":
 				// Message is ending; stop_reason is in event.Delta.StopReason.
+				// Capture usage data if available.
+				if event.Usage.InputTokens > 0 || event.Usage.OutputTokens > 0 {
+					totalInputTokens += event.Usage.InputTokens
+					totalOutputTokens += event.Usage.OutputTokens
+				}
 			}
 		}
 
@@ -222,7 +238,14 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 
 		// If there are no tool use blocks, we're done.
 		if len(toolUseBlocks) == 0 {
-			ch <- StreamChunk{Type: ChunkDone}
+			ch <- StreamChunk{
+				Type: ChunkDone,
+				Usage: &Usage{
+					Model:        string(Model),
+					InputTokens:  totalInputTokens,
+					OutputTokens: totalOutputTokens,
+				},
+			}
 			return
 		}
 

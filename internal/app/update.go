@@ -144,6 +144,10 @@ func (m *Model) handleStreamChunk(chunk agent.StreamChunk) tea.Cmd {
 		m.streaming = false
 		m.chat.FinishStreaming()
 		m.streamCancel = nil
+		// Track token usage.
+		if chunk.Usage != nil {
+			m.footer.AddUsage(chunk.Usage.Model, chunk.Usage.InputTokens, chunk.Usage.OutputTokens)
+		}
 		m.footer.SetFlash(ui.SuccessStyle.Render("Done"))
 		return ui.FlashTick()
 
