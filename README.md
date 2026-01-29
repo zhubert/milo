@@ -102,7 +102,15 @@ Conversations are persisted as sessions with full history. This enables:
 - **Anthropic SDK** — LLM provider integration
 - **Cobra** — CLI framework
 
-## Running
+## Installation
+
+### Homebrew
+
+```bash
+brew install zhubert/tap/milo
+```
+
+### From Source
 
 ```bash
 go build -o milo .
