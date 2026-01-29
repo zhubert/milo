@@ -132,6 +132,21 @@ gofmt -w .
 go mod tidy
 ```
 
+### CPU Profiling
+
+To diagnose performance issues, run with CPU profiling enabled:
+
+```bash
+./milo --cpuprofile=cpu.prof
+```
+
+Then analyze the profile:
+
+```bash
+go tool pprof -top cpu.prof    # Show top CPU consumers
+go tool pprof -web cpu.prof    # Open interactive graph in browser
+```
+
 ## What This Project Explores
 
 Building a coding agent requires solving several interesting problems:

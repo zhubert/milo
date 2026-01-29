@@ -2,6 +2,8 @@ package agent
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -9,12 +11,37 @@ import (
 	"github.com/zhubert/milo/internal/tool"
 )
 
+// readAgentConfig attempts to read AGENTS.md or CLAUDE.md from the working directory.
+// Returns the content if found, or empty string if neither file exists.
+func readAgentConfig(workDir string) string {
+	// Try AGENTS.md first, then CLAUDE.md
+	filenames := []string{"AGENTS.md", "CLAUDE.md"}
+	
+	for _, filename := range filenames {
+		path := filepath.Join(workDir, filename)
+		content, err := os.ReadFile(path)
+		if err == nil {
+			return string(content)
+		}
+	}
+	
+	return ""
+}
+
 // BuildSystemPrompt constructs the system prompt for the agent,
 // including environment info and available tool descriptions.
 func BuildSystemPrompt(workDir string, registry *tool.Registry) string {
 	var b strings.Builder
 
 	b.WriteString("You are a coding assistant. You help users with software engineering tasks by reading, writing, and editing files, and by running shell commands.\n\n")
+
+	// Read and include agent configuration if available
+	agentConfig := readAgentConfig(workDir)
+	if agentConfig != "" {
+		b.WriteString("## Project Configuration\n\n")
+		b.WriteString(agentConfig)
+		b.WriteString("\n\n")
+	}
 
 	b.WriteString("## Environment\n\n")
 	fmt.Fprintf(&b, "- Working directory: %s\n", workDir)

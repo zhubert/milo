@@ -83,6 +83,11 @@ func New(client anthropic.Client, registry *tool.Registry, perms *permission.Che
 	}
 }
 
+// ModelDisplayName returns a human-readable name for the current model.
+func (a *Agent) ModelDisplayName() string {
+	return ModelDisplayName()
+}
+
 // Permissions returns the permission checker for this agent.
 func (a *Agent) Permissions() *permission.Checker {
 	return a.perms
