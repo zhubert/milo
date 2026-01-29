@@ -31,19 +31,21 @@ const (
 	ChunkToolUse
 	ChunkToolResult
 	ChunkPermissionRequest
+	ChunkParallelProgress
 	ChunkDone
 	ChunkError
 )
 
 // StreamChunk is a unit of output from the agent's streaming loop.
 type StreamChunk struct {
-	Type      ChunkType
-	Text      string
-	ToolName  string
-	ToolID    string
-	ToolInput string
-	Result    *tool.Result
-	Err       error
+	Type             ChunkType
+	Text             string
+	ToolName         string
+	ToolID           string
+	ToolInput        string
+	Result           *tool.Result
+	Err              error
+	ParallelProgress *tool.ProgressUpdate // For ChunkParallelProgress
 }
 
 // PermissionResponse is the user's answer to a permission request.
@@ -63,10 +65,13 @@ type Agent struct {
 	perms      *permission.Checker
 	conv       *Conversation
 	detector   *loopdetector.Detector
+	executor   *tool.ToolExecutor
 	workDir    string
 	logger     *slog.Logger
 	PermResp   chan PermissionResponse
 }
+
+const defaultWorkerCount = 4
 
 // New creates a new Agent with the given client, registry, permission checker,
 // working directory, and logger.
@@ -77,6 +82,7 @@ func New(client anthropic.Client, registry *tool.Registry, perms *permission.Che
 		perms:    perms,
 		conv:     NewConversation(),
 		detector: loopdetector.NewWithDefaults(),
+		executor: tool.NewToolExecutor(registry, defaultWorkerCount),
 		workDir:  workDir,
 		logger:   logger,
 		PermResp: make(chan PermissionResponse, 1),
@@ -220,58 +226,10 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 			return
 		}
 
-		// Execute tools and collect results.
-		var resultBlocks []anthropic.ContentBlockParamUnion
-		for _, tu := range toolUseBlocks {
-			a.logger.Info("tool execution start", "tool", tu.name, "tool_id", tu.id)
-			a.logger.Debug("tool input", "tool", tu.name, "input", tu.input)
-
-			ch <- StreamChunk{
-				Type:      ChunkToolUse,
-				ToolName:  tu.name,
-				ToolID:    tu.id,
-				ToolInput: tu.input,
-			}
-
-			t := a.registry.Lookup(tu.name)
-			if t == nil {
-				a.logger.Warn("unknown tool", "tool", tu.name)
-				result := tool.Result{Output: fmt.Sprintf("unknown tool: %s", tu.name), IsError: true}
-				resultBlocks = append(resultBlocks,
-					anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
-				)
-				a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
-				ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
-				continue
-			}
-
-			// Check permission before executing.
-			if !a.checkPermission(ctx, ch, tu.name, json.RawMessage(tu.input)) {
-				a.logger.Warn("permission denied", "tool", tu.name)
-				result := tool.Result{Output: "permission denied by user", IsError: true}
-				resultBlocks = append(resultBlocks,
-					anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
-				)
-				a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
-				ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
-				continue
-			}
-
-			result, err := t.Execute(ctx, json.RawMessage(tu.input))
-			if err != nil {
-				a.logger.Error("tool execution error", "tool", tu.name, "error", err)
-				result = tool.Result{Output: fmt.Sprintf("tool execution error: %s", err), IsError: true}
-			}
-
-			if result.IsError {
-				a.logger.Warn("tool returned error result", "tool", tu.name, "output", result.Output)
-			}
-
-			resultBlocks = append(resultBlocks,
-				anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
-			)
-			a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
-			ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
+		// Execute tools - check permissions first, then execute in parallel where safe.
+		resultBlocks, cancelled := a.executeTools(ctx, ch, toolUseBlocks)
+		if cancelled {
+			return
 		}
 
 		// Check for doom loop after processing all tool calls
@@ -326,4 +284,124 @@ type toolUseInfo struct {
 	id    string
 	name  string
 	input string
+}
+
+// executeTools handles permission checks and parallel tool execution.
+// Returns the result blocks and whether execution was cancelled.
+func (a *Agent) executeTools(ctx context.Context, ch chan<- StreamChunk, toolUseBlocks []toolUseInfo) ([]anthropic.ContentBlockParamUnion, bool) {
+	var resultBlocks []anthropic.ContentBlockParamUnion
+
+	// Phase 1: Check permissions for all tools (must be sequential for user interaction).
+	// Separate tools into: allowed, denied, and unknown.
+	type toolStatus struct {
+		tu      toolUseInfo
+		t       tool.Tool
+		allowed bool
+	}
+	statuses := make([]toolStatus, len(toolUseBlocks))
+
+	for i, tu := range toolUseBlocks {
+		a.logger.Info("tool execution start", "tool", tu.name, "tool_id", tu.id)
+		a.logger.Debug("tool input", "tool", tu.name, "input", tu.input)
+
+		ch <- StreamChunk{
+			Type:      ChunkToolUse,
+			ToolName:  tu.name,
+			ToolID:    tu.id,
+			ToolInput: tu.input,
+		}
+
+		t := a.registry.Lookup(tu.name)
+		if t == nil {
+			a.logger.Warn("unknown tool", "tool", tu.name)
+			result := tool.Result{Output: fmt.Sprintf("unknown tool: %s", tu.name), IsError: true}
+			resultBlocks = append(resultBlocks,
+				anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
+			)
+			a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
+			ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
+			statuses[i] = toolStatus{tu: tu, t: nil, allowed: false}
+			continue
+		}
+
+		// Check permission.
+		if !a.checkPermission(ctx, ch, tu.name, json.RawMessage(tu.input)) {
+			if ctx.Err() != nil {
+				return resultBlocks, true // Cancelled
+			}
+			a.logger.Warn("permission denied", "tool", tu.name)
+			result := tool.Result{Output: "permission denied by user", IsError: true}
+			resultBlocks = append(resultBlocks,
+				anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
+			)
+			a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
+			ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
+			statuses[i] = toolStatus{tu: tu, t: t, allowed: false}
+			continue
+		}
+
+		statuses[i] = toolStatus{tu: tu, t: t, allowed: true}
+	}
+
+	// Phase 2: Execute allowed tools in parallel.
+	var allowedCalls []tool.ToolCall
+	var allowedIndices []int
+
+	for i, s := range statuses {
+		if s.allowed && s.t != nil {
+			allowedCalls = append(allowedCalls, tool.ToolCall{
+				ID:    s.tu.id,
+				Name:  s.tu.name,
+				Input: json.RawMessage(s.tu.input),
+			})
+			allowedIndices = append(allowedIndices, i)
+		}
+	}
+
+	if len(allowedCalls) == 0 {
+		return resultBlocks, false
+	}
+
+	// Set up progress channel.
+	progressCh := make(chan tool.ProgressUpdate, len(allowedCalls)*2)
+	go func() {
+		for update := range progressCh {
+			ch <- StreamChunk{
+				Type:             ChunkParallelProgress,
+				ParallelProgress: &update,
+			}
+		}
+	}()
+
+	// Execute tools in parallel.
+	results, err := a.executor.ExecuteTools(ctx, allowedCalls, progressCh)
+	close(progressCh)
+
+	if err != nil {
+		a.logger.Error("parallel execution error", "error", err)
+	}
+
+	// Process results in original order.
+	for i, taskResult := range results {
+		originalIdx := allowedIndices[i]
+		tu := statuses[originalIdx].tu
+
+		result := taskResult.Result
+		if taskResult.Err != nil {
+			a.logger.Error("tool execution error", "tool", tu.name, "error", taskResult.Err)
+			result = tool.Result{Output: fmt.Sprintf("tool execution error: %s", taskResult.Err), IsError: true}
+		}
+
+		if result.IsError {
+			a.logger.Warn("tool returned error result", "tool", tu.name, "output", result.Output)
+		}
+
+		resultBlocks = append(resultBlocks,
+			anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
+		)
+		a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
+		ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
+	}
+
+	return resultBlocks, false
 }

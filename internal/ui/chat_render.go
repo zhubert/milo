@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -141,37 +143,87 @@ func renderPattern(text, open, close string, style func(string) string) string {
 	return result.String()
 }
 
-// RenderToolUse formats a tool use notification.
-func RenderToolUse(name, input string) string {
-	label := ToolNameStyle.Render(fmt.Sprintf("⚡ %s", name))
-	if len(input) > 100 {
-		input = input[:100] + "..."
+// extractFilePath attempts to extract a file_path from JSON input.
+func extractFilePath(input string) string {
+	var data map[string]any
+	if err := json.Unmarshal([]byte(input), &data); err != nil {
+		return ""
 	}
-	detail := DimStyle.Render(input)
-	return "\n" + label + " " + detail + "\n"
+	if fp, ok := data["file_path"].(string); ok {
+		return fp
+	}
+	return ""
 }
 
-// RenderToolResult formats a tool execution result.
-func RenderToolResult(name string, output string, isError bool) string {
-	if len(output) > 500 {
-		output = output[:500] + "..."
+// shortenPath returns the last n components of a path.
+func shortenPath(path string, components int) string {
+	parts := strings.Split(path, string(filepath.Separator))
+	if len(parts) <= components {
+		return path
+	}
+	return "…/" + strings.Join(parts[len(parts)-components:], string(filepath.Separator))
+}
+
+// formatToolSummary creates a brief summary of what the tool did.
+func formatToolSummary(name, input string) string {
+	filePath := extractFilePath(input)
+	if filePath != "" {
+		short := shortenPath(filePath, 3)
+		return DimStyle.Render(short)
 	}
 
-	var prefix string
+	// For other tools, show truncated input.
+	if len(input) > 60 {
+		input = input[:60] + "…"
+	}
+	return DimStyle.Render(input)
+}
+
+// RenderToolResult formats a tool execution result with clean visual display.
+func RenderToolResult(name, input, output string, isError bool) string {
+	var b strings.Builder
+
+	// Add spacing before tool block.
+	b.WriteString("\n")
+
+	// Status icon and tool name with file context.
+	var statusIcon string
 	if isError {
-		prefix = ErrorStyle.Render("✗ " + name)
+		statusIcon = ErrorStyle.Render("✗")
 	} else {
-		prefix = SuccessStyle.Render("✓ " + name)
+		statusIcon = SuccessStyle.Render("✓")
 	}
 
-	lines := strings.Split(output, "\n")
-	if len(lines) > 5 {
-		lines = lines[:5]
-		lines = append(lines, DimStyle.Render("..."))
-	}
-	detail := DimStyle.Render(strings.Join(lines, "\n"))
+	toolName := ToolNameStyle.Render(name)
+	summary := formatToolSummary(name, input)
 
-	return prefix + "\n" + detail + "\n"
+	b.WriteString(statusIcon + " " + toolName + "  " + summary + "\n")
+
+	// Render output if present.
+	if output != "" {
+		lines := strings.Split(output, "\n")
+		maxLines := 6
+		truncated := false
+		if len(lines) > maxLines {
+			lines = lines[:maxLines]
+			truncated = true
+		}
+
+		// Render each line with subtle gutter.
+		gutterStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#4B5563"))
+		for _, line := range lines {
+			if len(line) > 100 {
+				line = line[:100] + "…"
+			}
+			b.WriteString(gutterStyle.Render("│ ") + DimStyle.Render(line) + "\n")
+		}
+
+		if truncated {
+			b.WriteString(gutterStyle.Render("│ ") + DimStyle.Render("…") + "\n")
+		}
+	}
+
+	return b.String()
 }
 
 // RenderErrorMessage formats an error message for the chat area.

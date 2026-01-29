@@ -12,7 +12,16 @@ import (
 )
 
 // EditTool performs string-replacement edits on files.
+// It implements FileAccessor to enable conflict detection.
 type EditTool struct{}
+
+// GetFilePath extracts the target file path from the input.
+func (t *EditTool) GetFilePath(input json.RawMessage) string {
+	return ExtractFilePath(input)
+}
+
+// IsWriteOperation returns true since this tool modifies files.
+func (t *EditTool) IsWriteOperation() bool { return true }
 
 type editInput struct {
 	FilePath   string `json:"file_path"`

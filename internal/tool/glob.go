@@ -15,9 +15,13 @@ import (
 const maxGlobResults = 1000
 
 // GlobTool searches for files matching a glob pattern.
+// It implements ParallelSafeTool since it only reads directory listings.
 type GlobTool struct {
 	WorkDir string
 }
+
+// IsParallelSafe returns true since glob operations don't modify state.
+func (t *GlobTool) IsParallelSafe() bool { return true }
 
 type globInput struct {
 	Pattern string `json:"pattern"`

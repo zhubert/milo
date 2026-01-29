@@ -57,3 +57,26 @@ func (s *SpinnerState) RenderSpinner(verb string) string {
 	label := DimStyle.Render(fmt.Sprintf(" %s... %s", verb, elapsed))
 	return frame + label
 }
+
+// RenderParallelSpinner renders a spinner showing parallel tool execution progress.
+func (s *SpinnerState) RenderParallelSpinner(total, completed int, tools []string) string {
+	elapsed := s.Elapsed().Truncate(time.Second)
+	frame := ToolNameStyle.Render(s.Frame())
+
+	var label string
+	if len(tools) > 0 {
+		// Show tools currently in progress.
+		toolList := ""
+		for i, t := range tools {
+			if i > 0 {
+				toolList += ", "
+			}
+			toolList += t
+		}
+		label = DimStyle.Render(fmt.Sprintf(" Running tools (%d/%d)... %s [%s]", completed, total, elapsed, toolList))
+	} else {
+		label = DimStyle.Render(fmt.Sprintf(" Running tools (%d/%d)... %s", completed, total, elapsed))
+	}
+
+	return frame + label
+}

@@ -121,6 +121,16 @@ func (m *Model) handleStreamChunk(chunk agent.StreamChunk) tea.Cmd {
 		}
 		return listenForChunks(m.streamCh)
 
+	case agent.ChunkParallelProgress:
+		if chunk.ParallelProgress != nil {
+			m.chat.SetParallelProgress(
+				chunk.ParallelProgress.TotalTasks,
+				chunk.ParallelProgress.CompletedTasks,
+				chunk.ParallelProgress.InProgress,
+			)
+		}
+		return listenForChunks(m.streamCh)
+
 	case agent.ChunkPermissionRequest:
 		m.permPending = true
 		m.permToolName = chunk.ToolName

@@ -12,7 +12,11 @@ import (
 )
 
 // ReadTool reads file contents with optional offset and limit.
+// It implements ParallelSafeTool since it only reads data.
 type ReadTool struct{}
+
+// IsParallelSafe returns true since read operations don't modify state.
+func (t *ReadTool) IsParallelSafe() bool { return true }
 
 type readInput struct {
 	FilePath string `json:"file_path"`

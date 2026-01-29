@@ -11,7 +11,16 @@ import (
 )
 
 // WriteTool writes content to a file, creating parent directories as needed.
+// It implements FileAccessor to enable conflict detection.
 type WriteTool struct{}
+
+// GetFilePath extracts the target file path from the input.
+func (t *WriteTool) GetFilePath(input json.RawMessage) string {
+	return ExtractFilePath(input)
+}
+
+// IsWriteOperation returns true since this tool modifies files.
+func (t *WriteTool) IsWriteOperation() bool { return true }
 
 type writeInput struct {
 	FilePath string `json:"file_path"`

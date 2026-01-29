@@ -5,7 +5,7 @@ import (
 )
 
 func TestVersionDefaults(t *testing.T) {
-	t.Parallel()
+	// Note: Cannot run in parallel due to global variable access
 
 	// Test default values
 	if Version == "" {
@@ -25,7 +25,7 @@ func TestVersionDefaults(t *testing.T) {
 }
 
 func TestVersionCanBeOverridden(t *testing.T) {
-	t.Parallel()
+	// Note: Cannot run in parallel due to global variable modification
 
 	// Save original values
 	originalVersion := Version

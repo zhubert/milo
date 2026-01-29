@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const maxInputHeight = 2
+const maxInputHeight = 10
 
 // chatMessage stores a rendered message in the history.
 type chatMessage struct {
@@ -35,6 +35,19 @@ type Chat struct {
 
 	permissionMode bool   // true when waiting for permission response
 	permToolName   string // tool name for permission prompt
+
+	pendingToolName  string // tool currently being executed
+	pendingToolInput string // input for pending tool (used for spinner display)
+
+	// Parallel execution progress state.
+	parallelProgress *ParallelProgressState
+}
+
+// ParallelProgressState tracks progress of parallel tool execution.
+type ParallelProgressState struct {
+	Total      int
+	Completed  int
+	InProgress []string
 }
 
 // NewChat creates a new chat component.
@@ -154,15 +167,35 @@ func (c *Chat) AppendStreaming(text string) {
 	c.updateContent()
 }
 
-// AppendToolUse adds a tool use notification to the streaming content.
+// AppendToolUse sets the pending tool (shown as spinner while executing).
 func (c *Chat) AppendToolUse(name, input string) {
-	c.streaming += RenderToolUse(name, input)
+	c.pendingToolName = name
+	c.pendingToolInput = input
 	c.updateContent()
 }
 
-// AppendToolResult adds a tool result to the streaming content.
+// AppendToolResult clears pending tool and adds the result to streaming content.
 func (c *Chat) AppendToolResult(name, output string, isError bool) {
-	c.streaming += RenderToolResult(name, output, isError)
+	// Clear pending tool state.
+	input := c.pendingToolInput
+	c.pendingToolName = ""
+	c.pendingToolInput = ""
+
+	// Clear parallel progress when a tool completes.
+	c.parallelProgress = nil
+
+	// Add result to streaming content with the original input for context.
+	c.streaming += RenderToolResult(name, input, output, isError)
+	c.updateContent()
+}
+
+// SetParallelProgress updates the parallel execution progress display.
+func (c *Chat) SetParallelProgress(total, completed int, inProgress []string) {
+	c.parallelProgress = &ParallelProgressState{
+		Total:      total,
+		Completed:  completed,
+		InProgress: inProgress,
+	}
 	c.updateContent()
 }
 
@@ -184,7 +217,7 @@ func (c *Chat) Update(msg tea.Msg) (*Chat, tea.Cmd) {
 
 	switch msg.(type) {
 	case StopwatchTickMsg:
-		if c.spinner != nil && (c.waiting || c.streaming != "") {
+		if c.spinner != nil && (c.waiting || c.streaming != "" || c.pendingToolName != "") {
 			c.spinner.Advance()
 			c.updateContent()
 			cmds = append(cmds, StopwatchTick())
@@ -249,6 +282,26 @@ func (c *Chat) SetWelcomeContent(content string) {
 	c.updateContent()
 }
 
+// formatToolVerb converts a tool name to a present participle for spinner display.
+func formatToolVerb(name string) string {
+	switch name {
+	case "read":
+		return "Reading"
+	case "write":
+		return "Writing"
+	case "edit":
+		return "Editing"
+	case "bash":
+		return "Running"
+	case "glob":
+		return "Searching"
+	case "grep":
+		return "Searching"
+	default:
+		return "Running " + name
+	}
+}
+
 func (c *Chat) updateContent() {
 	var parts []string
 
@@ -261,32 +314,45 @@ func (c *Chat) updateContent() {
 		parts = append(parts, msg.content)
 	}
 
-	// Show streaming content, rendering only complete sections.
-	// Incomplete parts are buffered until a newline arrives.
+	// Show streaming content.
 	if c.streaming != "" {
-		complete, _ := splitCompleteMarkdown(c.streaming)
-		if complete != "" {
-			rendered := RenderAssistantLabel() + RenderMarkdown(complete, c.width-4)
-			parts = append(parts, rendered)
-		} else {
-			// Show label with spinner-like indicator while buffering
-			parts = append(parts, RenderAssistantLabel()+DimStyle.Render("..."))
-		}
+		rendered := RenderAssistantLabel() + RenderMarkdown(c.streaming, c.width-4)
+		parts = append(parts, rendered)
 	}
 
-	// Show spinner if waiting.
-	if c.waiting && c.spinner != nil {
-		verb := "Thinking"
+	// Show pending tool spinner if a tool is executing.
+	if c.parallelProgress != nil && c.spinner != nil {
+		// Show parallel execution progress.
+		parts = append(parts, c.spinner.RenderParallelSpinner(
+			c.parallelProgress.Total,
+			c.parallelProgress.Completed,
+			c.parallelProgress.InProgress,
+		))
+	} else if c.pendingToolName != "" && c.spinner != nil {
+		verb := formatToolVerb(c.pendingToolName)
 		parts = append(parts, c.spinner.RenderSpinner(verb))
+	} else if c.waiting && c.spinner != nil {
+		// Show thinking spinner if waiting for first response.
+		parts = append(parts, c.spinner.RenderSpinner("Thinking"))
 	}
 
 	content := strings.Join(parts, "\n\n")
 
 	// Size viewport based on content, up to max height.
+	// Calculate available height dynamically based on actual input height.
+	actualInputHeight := c.input.Height()
+	if actualInputHeight < 1 {
+		actualInputHeight = 1
+	}
+	availableHeight := c.height - actualInputHeight - 2 // 2 for border lines
+	if availableHeight < 1 {
+		availableHeight = 1
+	}
+
 	contentLines := strings.Count(content, "\n") + 1
 	vpHeight := contentLines
-	if vpHeight > c.maxVPHeight {
-		vpHeight = c.maxVPHeight
+	if vpHeight > availableHeight {
+		vpHeight = availableHeight
 	}
 	if vpHeight < 1 {
 		vpHeight = 1
@@ -295,30 +361,4 @@ func (c *Chat) updateContent() {
 
 	c.viewport.SetContent(content)
 	c.viewport.GotoBottom()
-}
-
-// splitCompleteMarkdown splits streaming content into complete (renderable)
-// and incomplete (raw) parts. This prevents markdown flashing during streaming.
-func splitCompleteMarkdown(content string) (complete, incomplete string) {
-	// Count code block fences to see if we're inside an unclosed block
-	fenceCount := strings.Count(content, "```")
-	inCodeBlock := fenceCount%2 == 1
-
-	if inCodeBlock {
-		// Find the last opening fence and don't render anything after it
-		lastFence := strings.LastIndex(content, "```")
-		if lastFence > 0 {
-			return content[:lastFence], content[lastFence:]
-		}
-		return "", content
-	}
-
-	// Not in a code block - split at the last newline
-	lastNewline := strings.LastIndex(content, "\n")
-	if lastNewline == -1 {
-		// No newlines yet, everything is incomplete
-		return "", content
-	}
-
-	return content[:lastNewline+1], content[lastNewline+1:]
 }

@@ -23,9 +23,13 @@ const (
 )
 
 // GrepTool searches file contents for a regular expression.
+// It implements ParallelSafeTool since it only reads file contents.
 type GrepTool struct {
 	WorkDir string
 }
+
+// IsParallelSafe returns true since grep operations don't modify state.
+func (t *GrepTool) IsParallelSafe() bool { return true }
 
 type grepInput struct {
 	Pattern string `json:"pattern"`
