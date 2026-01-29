@@ -11,8 +11,8 @@ import (
 
 // Default thresholds for doom loop detection.
 const (
-	DefaultMaxIterations       = 25 // Maximum turns per user request
-	DefaultMaxRepeatedCalls    = 3  // Same tool+input called this many times
+	DefaultMaxIterations        = 25 // Maximum turns per user request
+	DefaultMaxRepeatedCalls     = 5  // Same tool+input called this many times
 	DefaultMaxConsecutiveErrors = 5  // Consecutive error results
 )
 
