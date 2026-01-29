@@ -2,3 +2,4 @@
 *.log
 milo
 .milo
+dist/
