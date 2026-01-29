@@ -1,0 +1,61 @@
+version: 2
+
+project_name: milo
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/zhubert/milo/internal/version.Version={{.Version}} -X github.com/zhubert/milo/internal/version.Commit={{.Commit}}
+
+archives:
+  - formats: ['tar.gz']
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: ['zip']
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+brews:
+  - repository:
+      owner: zhubert
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/zhubert/milo"
+    description: "A Go-based AI coding agent"
+    license: "MIT"
+    dependencies:
+      - name: git
+    test: |
+      system "#{bin}/milo", "--version"
+    install: |
+      bin.install "milo"

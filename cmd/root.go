@@ -14,12 +14,14 @@ import (
 	"github.com/zhubert/milo/internal/logging"
 	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/tool"
+	"github.com/zhubert/milo/internal/version"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "milo",
-	Short: "A coding agent powered by Claude",
-	RunE:  runTUI,
+	Use:     "milo",
+	Short:   "A coding agent powered by Claude",
+	Version: version.Version,
+	RunE:    runTUI,
 }
 
 // Execute runs the root command.
