@@ -14,6 +14,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/zhubert/milo/internal/agent"
+	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/session"
 	"github.com/zhubert/milo/internal/version"
 )
@@ -97,6 +98,12 @@ func (r *Runner) Run() error {
 				return nil
 			}
 
+			// Check for slash commands.
+			if strings.HasPrefix(input, "/") {
+				r.handleSlashCommand(input)
+				continue
+			}
+
 			// Process the input.
 			if err := r.processInput(input, sigCh); err != nil {
 				fmt.Fprintf(os.Stderr, "%sError: %v%s\n", colorRed, err, colorReset)
@@ -117,35 +124,39 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 
 	fmt.Println() // blank line before response
 
-	var hasOutput bool
-	var pendingTool string // Track current tool for result display
+	var textBuffer strings.Builder // Buffer text for markdown rendering
+	var pendingTool string          // Track current tool for result display
+
+	// flushText renders and prints any buffered text
+	flushText := func() {
+		if textBuffer.Len() > 0 {
+			rendered := renderMarkdown(textBuffer.String())
+			fmt.Print(rendered)
+			textBuffer.Reset()
+		}
+	}
 
 	for {
 		select {
 		case <-sigCh:
 			cancel()
+			flushText()
 			fmt.Println(colorYellow + "\n[Cancelled]" + colorReset)
 			return nil
 
 		case chunk, ok := <-ch:
 			if !ok {
 				// Channel closed unexpectedly.
-				if hasOutput {
-					fmt.Println()
-				}
+				flushText()
 				return nil
 			}
 
 			switch chunk.Type {
 			case agent.ChunkText:
-				hasOutput = true
-				fmt.Print(chunk.Text)
+				textBuffer.WriteString(chunk.Text)
 
 			case agent.ChunkToolUse:
-				if hasOutput {
-					fmt.Println()
-					hasOutput = false
-				}
+				flushText()
 				// Show tool with file info if available
 				toolInfo := formatToolInfo(chunk.ToolName, chunk.ToolInput)
 				pendingTool = chunk.ToolName
@@ -172,19 +183,15 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 				pendingTool = ""
 
 			case agent.ChunkPermissionRequest:
+				flushText()
 				if pendingTool != "" {
 					fmt.Println() // finish pending tool line
 					pendingTool = ""
 				}
-				// Show the command/input being requested
-				fmt.Printf("\n%s─── Permission Required ───%s\n", colorYellow, colorReset)
-				fmt.Printf("%s%s%s\n", colorBold, chunk.ToolName, colorReset)
-				if chunk.ToolInput != "" {
-					// Try to show the command or file path nicely
-					permInfo := formatPermissionInfo(chunk.ToolName, chunk.ToolInput)
-					fmt.Printf("%s%s%s\n", colorDim, permInfo, colorReset)
-				}
-				fmt.Printf("%sAllow? [y/n/a(lways)]: %s", colorYellow, colorReset)
+				// Show the command/input being requested in function-call style
+				permInfo := formatPermissionInfo(chunk.ToolName, chunk.ToolInput)
+				fmt.Printf("\n%sAllow %s%s(%s%s%s)%s? [y/n/a]: %s",
+					colorYellow, colorBold, chunk.ToolName, colorDim, permInfo, colorYellow, colorReset, colorReset)
 				resp := r.readPermissionResponse()
 				r.agent.PermResp <- resp
 
@@ -192,26 +199,194 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 				// Skip parallel progress - too noisy
 
 			case agent.ChunkContextCompacted:
+				flushText()
 				fmt.Printf("  %s→ context compacted%s\n", colorDim, colorReset)
 
 			case agent.ChunkDone:
-				if hasOutput {
-					fmt.Println()
-				}
+				flushText()
 				fmt.Println()
 				r.saveSession()
 				return nil
 
 			case agent.ChunkError:
-				if hasOutput {
-					fmt.Println()
-				}
+				flushText()
 				if chunk.Err != nil {
 					return chunk.Err
 				}
 				return fmt.Errorf("unknown error")
 			}
 		}
+	}
+}
+
+func (r *Runner) handleSlashCommand(input string) {
+	parts := strings.Fields(input)
+	if len(parts) == 0 {
+		return
+	}
+
+	cmd := strings.ToLower(parts[0])
+	args := parts[1:]
+
+	switch cmd {
+	case "/model", "/m":
+		r.handleModelCommand(args)
+	case "/permissions", "/perms", "/p":
+		r.handlePermissionsCommand(args)
+	case "/help", "/h", "/?":
+		r.handleHelpCommand()
+	default:
+		fmt.Printf("%sUnknown command: %s. Type /help for available commands.%s\n", colorRed, cmd, colorReset)
+	}
+}
+
+func (r *Runner) handleHelpCommand() {
+	help := `
+Available commands:
+  /model, /m               - Change or view the current model
+    list                   - Show available models
+    <model-id>             - Switch to a model (e.g. /m claude-opus-4-5)
+  /permissions, /perms, /p - Manage permission rules
+    list                   - Show all custom rules
+    add <rule>             - Add a rule, e.g. Bash(git:*)
+    remove <rule>          - Remove a rule
+  /help, /h, /?            - Show this help message
+
+  exit, quit               - Close the application
+`
+	fmt.Println(help)
+}
+
+func (r *Runner) handleModelCommand(args []string) {
+	if len(args) == 0 {
+		r.listModels()
+		return
+	}
+
+	subcmd := strings.ToLower(args[0])
+	if subcmd == "list" || subcmd == "ls" || subcmd == "l" {
+		r.listModels()
+		return
+	}
+
+	// Treat argument as model ID
+	r.switchModel(args[0])
+}
+
+func (r *Runner) listModels() {
+	current := r.agent.Model()
+	models := agent.AvailableModels()
+
+	fmt.Printf("\nCurrent model: %s%s%s\n\n", colorBold, r.agent.ModelDisplayName(), colorReset)
+	fmt.Println("Available models:")
+	for _, opt := range models {
+		marker := "  "
+		if opt.ID == current {
+			marker = colorGreen + "→ " + colorReset
+		}
+		fmt.Printf("%s%-35s %s%s%s\n", marker, opt.ID, colorDim, opt.DisplayName, colorReset)
+	}
+	fmt.Println("\nUsage: /model <model-id>")
+}
+
+func (r *Runner) switchModel(modelID string) {
+	models := agent.AvailableModels()
+
+	// Find matching model (partial match allowed)
+	var match *agent.ModelOption
+	for _, opt := range models {
+		if strings.Contains(strings.ToLower(opt.ID), strings.ToLower(modelID)) {
+			match = &opt
+			break
+		}
+	}
+
+	if match == nil {
+		fmt.Printf("%sModel not found: %s%s\n", colorRed, modelID, colorReset)
+		fmt.Println("Use /model list to see available models.")
+		return
+	}
+
+	r.agent.SetModel(match.ID)
+	fmt.Printf("Switched to %s%s%s\n", colorGreen, match.DisplayName, colorReset)
+}
+
+func (r *Runner) handlePermissionsCommand(args []string) {
+	perms := r.agent.Permissions()
+
+	if len(args) == 0 {
+		help := `
+Permission commands:
+  /permissions list           - Show all custom rules
+  /permissions add <rule>     - Add a rule (default: allow)
+  /permissions remove <rule>  - Remove a rule
+
+Examples:
+  /p add Bash(npm:*)
+  /p add Bash(go build:*)
+  /p add Bash(rm -rf *):deny
+  /p remove Bash(npm:*)
+`
+		fmt.Println(help)
+		return
+	}
+
+	subcmd := strings.ToLower(args[0])
+	subargs := args[1:]
+
+	switch subcmd {
+	case "list", "ls", "l":
+		r.listPermissions(perms)
+	case "add", "a":
+		r.addPermission(perms, subargs)
+	case "remove", "rm", "delete", "del":
+		r.removePermission(perms, subargs)
+	default:
+		fmt.Printf("%sUnknown permissions subcommand: %s%s\n", colorRed, subcmd, colorReset)
+	}
+}
+
+func (r *Runner) listPermissions(perms *permission.Checker) {
+	rules := perms.CustomRules()
+	if len(rules) == 0 {
+		fmt.Println("No custom permission rules configured.")
+		return
+	}
+
+	fmt.Println("\nCustom permission rules:")
+	for _, rule := range rules {
+		fmt.Printf("  %s\n", rule.String())
+	}
+	fmt.Println()
+}
+
+func (r *Runner) addPermission(perms *permission.Checker, args []string) {
+	if len(args) == 0 {
+		fmt.Printf("%sUsage: /permissions add <rule>%s\n", colorRed, colorReset)
+		return
+	}
+
+	ruleStr := strings.Join(args, " ")
+	rule, err := permission.ParseRule(ruleStr)
+	if err != nil {
+		fmt.Printf("%sError parsing rule: %v%s\n", colorRed, err, colorReset)
+		return
+	}
+	perms.AddRule(rule)
+	fmt.Printf("Added rule: %s%s%s\n", colorGreen, ruleStr, colorReset)
+}
+
+func (r *Runner) removePermission(perms *permission.Checker, args []string) {
+	if len(args) == 0 {
+		fmt.Printf("%sUsage: /permissions remove <rule>%s\n", colorRed, colorReset)
+		return
+	}
+
+	rule := strings.Join(args, " ")
+	if perms.RemoveRule(rule) {
+		fmt.Printf("Removed rule: %s%s%s\n", colorGreen, rule, colorReset)
+	} else {
+		fmt.Printf("%sRule not found: %s%s\n", colorYellow, rule, colorReset)
 	}
 }
 
@@ -354,6 +529,10 @@ func formatToolInfo(name, input string) string {
 			short := shortenFilePath(p, 3)
 			return fmt.Sprintf("%s %s%s%s", name, colorDim, short, colorReset)
 		}
+	case "multi_read":
+		if files, ok := data["files"].([]any); ok {
+			return fmt.Sprintf("%s %s(%d files)%s", name, colorDim, len(files), colorReset)
+		}
 	case "list_dir":
 		if p, ok := data["path"].(string); ok {
 			short := shortenFilePath(p, 3)
@@ -372,13 +551,132 @@ func countLines(s string) int {
 	return strings.Count(s, "\n") + 1
 }
 
+// renderMarkdown converts markdown to styled terminal output.
+func renderMarkdown(content string) string {
+	var result strings.Builder
+	lines := strings.Split(content, "\n")
+	inCodeBlock := false
+	var codeLines []string
+	var codeLang string
+
+	for _, line := range lines {
+		// Code block fences
+		if strings.HasPrefix(line, "```") {
+			if !inCodeBlock {
+				inCodeBlock = true
+				codeLang = strings.TrimPrefix(line, "```")
+				codeLines = nil
+			} else {
+				// Render the code block
+				result.WriteString(renderCodeBlock(codeLines, codeLang))
+				inCodeBlock = false
+			}
+			continue
+		}
+
+		if inCodeBlock {
+			codeLines = append(codeLines, line)
+			continue
+		}
+
+		// Headers
+		if strings.HasPrefix(line, "### ") {
+			text := strings.TrimPrefix(line, "### ")
+			result.WriteString(colorBold + text + colorReset + "\n")
+			continue
+		}
+		if strings.HasPrefix(line, "## ") {
+			text := strings.TrimPrefix(line, "## ")
+			result.WriteString(colorBold + colorCyan + text + colorReset + "\n")
+			continue
+		}
+		if strings.HasPrefix(line, "# ") {
+			text := strings.TrimPrefix(line, "# ")
+			result.WriteString(colorBold + colorCyan + text + colorReset + "\n")
+			continue
+		}
+
+		// Bullet lists
+		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+			result.WriteString("  • " + renderInline(line[2:]) + "\n")
+			continue
+		}
+
+		// Numbered lists (basic support)
+		if len(line) > 2 && line[0] >= '1' && line[0] <= '9' && line[1] == '.' && line[2] == ' ' {
+			result.WriteString("  " + line[:2] + " " + renderInline(line[3:]) + "\n")
+			continue
+		}
+
+		// Regular line with inline formatting
+		result.WriteString(renderInline(line) + "\n")
+	}
+
+	// Handle unclosed code block
+	if inCodeBlock && len(codeLines) > 0 {
+		result.WriteString(renderCodeBlock(codeLines, codeLang))
+	}
+
+	return result.String()
+}
+
+// renderCodeBlock formats a code block with background styling.
+func renderCodeBlock(lines []string, lang string) string {
+	var b strings.Builder
+	// Code block colors
+	codeBg := "\033[48;5;236m" // dark gray background
+	codeFg := "\033[38;5;159m" // light cyan text
+
+	if lang != "" {
+		b.WriteString(colorDim + " " + lang + " " + colorReset + "\n")
+	}
+	for _, line := range lines {
+		b.WriteString(codeBg + codeFg + " " + line + " " + colorReset + "\n")
+	}
+	return b.String()
+}
+
+// renderInline handles bold and inline code.
+func renderInline(text string) string {
+	// Bold: **text**
+	text = renderPattern(text, "**", "**", colorBold, colorReset)
+	// Inline code: `text`
+	codeStyle := "\033[48;5;236m\033[38;5;159m"
+	text = renderPattern(text, "`", "`", codeStyle, colorReset)
+	return text
+}
+
+// renderPattern replaces delimited text with styled text.
+func renderPattern(text, open, close, startStyle, endStyle string) string {
+	var result strings.Builder
+	for {
+		start := strings.Index(text, open)
+		if start == -1 {
+			result.WriteString(text)
+			break
+		}
+		end := strings.Index(text[start+len(open):], close)
+		if end == -1 {
+			result.WriteString(text)
+			break
+		}
+		end += start + len(open)
+
+		result.WriteString(text[:start])
+		inner := text[start+len(open) : end]
+		result.WriteString(startStyle + inner + endStyle)
+		text = text[end+len(close):]
+	}
+	return result.String()
+}
+
 // formatPermissionInfo extracts the key info from tool input for permission display.
 func formatPermissionInfo(toolName, input string) string {
 	var data map[string]any
 	if err := json.Unmarshal([]byte(input), &data); err != nil {
 		// If not JSON, just return truncated input
-		if len(input) > 200 {
-			return input[:200] + "…"
+		if len(input) > 80 {
+			return input[:77] + "..."
 		}
 		return input
 	}
@@ -386,30 +684,24 @@ func formatPermissionInfo(toolName, input string) string {
 	switch toolName {
 	case "bash":
 		if cmd, ok := data["command"].(string); ok {
-			// Show the command, potentially truncated
-			if len(cmd) > 200 {
-				return cmd[:200] + "…"
+			if len(cmd) > 80 {
+				return cmd[:77] + "..."
 			}
 			return cmd
 		}
-	case "write":
+	case "write", "edit", "read":
 		if fp, ok := data["file_path"].(string); ok {
-			return fmt.Sprintf("write to: %s", fp)
-		}
-	case "edit":
-		if fp, ok := data["file_path"].(string); ok {
-			return fmt.Sprintf("edit: %s", fp)
+			return fp
 		}
 	default:
-		// Try file_path
 		if fp, ok := data["file_path"].(string); ok {
 			return fp
 		}
 	}
 
 	// Fallback: truncated JSON
-	if len(input) > 200 {
-		return input[:200] + "…"
+	if len(input) > 80 {
+		return input[:77] + "..."
 	}
 	return input
 }

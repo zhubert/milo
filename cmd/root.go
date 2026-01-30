@@ -80,6 +80,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	registry := tool.NewRegistry()
 	tools := []tool.Tool{
 		&tool.ReadTool{},
+		&tool.MultiReadTool{},
 		&tool.WriteTool{},
 		&tool.EditTool{},
 		&tool.MoveTool{},
