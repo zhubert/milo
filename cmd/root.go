@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/zhubert/milo/internal/agent"
 	"github.com/zhubert/milo/internal/app"
 	"github.com/zhubert/milo/internal/logging"
+	"github.com/zhubert/milo/internal/lsp"
 	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/session"
 	"github.com/zhubert/milo/internal/tool"
@@ -62,6 +64,20 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 	logger.Info("starting milo", "work_dir", workDir)
 
+	// Set up LSP registry and start background detection
+	lspRegistry := lsp.NewRegistry()
+	go lspRegistry.DetectAvailable(context.Background())
+
+	lspManager := lsp.NewManager(lspRegistry)
+	lspTool := &tool.LSPTool{WorkDir: workDir, Manager: lspManager}
+
+	// Ensure LSP servers are cleaned up on exit
+	defer func() {
+		if err := lspTool.Close(); err != nil {
+			logger.Warn("closing LSP servers", "error", err)
+		}
+	}()
+
 	registry := tool.NewRegistry()
 	tools := []tool.Tool{
 		&tool.ReadTool{},
@@ -74,6 +90,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		&tool.ListDirTool{WorkDir: workDir},
 		&tool.WebFetchTool{},
 		&tool.WebSearchTool{},
+		lspTool,
 	}
 	for _, t := range tools {
 		if err := registry.Register(t); err != nil {
