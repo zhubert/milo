@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/zhubert/milo/internal/agent"
 	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/ui"
 )
@@ -23,6 +24,8 @@ func (m *Model) handleSlashCommand(input string) tea.Cmd {
 	switch cmd {
 	case "/permissions", "/perms", "/p":
 		return m.handlePermissionsCommand(args)
+	case "/model", "/m":
+		return m.handleModelCommand(args)
 	case "/help", "/h", "/?":
 		return m.handleHelpCommand()
 	default:
@@ -33,10 +36,13 @@ func (m *Model) handleSlashCommand(input string) tea.Cmd {
 
 func (m *Model) handleHelpCommand() tea.Cmd {
 	help := `Available commands:
-  /permissions, /perms, /p  - Manage permission rules
-    list                    - Show all custom rules
-    add <rule>              - Add a rule, e.g. Bash(git:*)
-    remove <rule>           - Remove a rule
+  /model, /m               - Change or view the current model
+    list                   - Show available models
+    <model-id>             - Switch to a model (e.g. /m claude-opus-4-5)
+  /permissions, /perms, /p - Manage permission rules
+    list                   - Show all custom rules
+    add <rule>             - Add a rule, e.g. Bash(git:*)
+    remove <rule>          - Remove a rule
   /help, /h, /?            - Show this help message
 
   Special commands:
@@ -149,5 +155,66 @@ func (m *Model) removePermission(perms *permission.Checker, args []string) tea.C
 	} else {
 		m.chat.AddSystemMessage(fmt.Sprintf("Rule not found: %s", rule.String()))
 	}
+	return ui.FlashTick()
+}
+
+func (m *Model) handleModelCommand(args []string) tea.Cmd {
+	if len(args) == 0 {
+		// Show current model and available options
+		return m.listModels()
+	}
+
+	subcmd := strings.ToLower(args[0])
+	if subcmd == "list" || subcmd == "ls" || subcmd == "l" {
+		return m.listModels()
+	}
+
+	// Treat argument as model ID
+	return m.switchModel(subcmd)
+}
+
+func (m *Model) listModels() tea.Cmd {
+	current := m.agent.Model()
+	models := agent.AvailableModels()
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Current model: %s\n\n", m.agent.ModelDisplayName()))
+	sb.WriteString("Available models:\n")
+	for _, opt := range models {
+		marker := "  "
+		if opt.ID == current {
+			marker = "→ "
+		}
+		sb.WriteString(fmt.Sprintf("%s%-30s %s\n", marker, opt.ID, opt.DisplayName))
+	}
+	sb.WriteString("\nUsage: /model <model-id>")
+	m.chat.AddSystemMessage(sb.String())
+	return nil
+}
+
+func (m *Model) switchModel(modelID string) tea.Cmd {
+	// Validate model ID against available models
+	models := agent.AvailableModels()
+	var found bool
+	var displayName string
+	for _, opt := range models {
+		if opt.ID == modelID {
+			found = true
+			displayName = opt.DisplayName
+			break
+		}
+	}
+
+	if !found {
+		// Allow arbitrary model IDs (for new models not in the list)
+		displayName = modelID
+	}
+
+	m.agent.SetModel(modelID)
+	m.header = ui.NewHeader(m.header.WorkDir(), m.agent.ModelDisplayName())
+	m.chat.SetWelcomeContent(m.header.WelcomeContent())
+
+	m.footer.SetFlash(ui.SuccessStyle.Render(fmt.Sprintf("Switched to %s", displayName)))
+	m.chat.AddSystemMessage(fmt.Sprintf("Model changed to: %s", displayName))
 	return ui.FlashTick()
 }

@@ -13,15 +13,10 @@ import (
 )
 
 const (
-	// Model is the Claude model used by the agent.
-	Model          = anthropic.ModelClaudeSonnet4_20250514
+	// DefaultModel is the Claude model used when none is specified.
+	DefaultModel   = anthropic.ModelClaudeSonnet4_20250514
 	defaultMaxToks = 8192
 )
-
-// ModelDisplayName returns a human-readable name for the current model.
-func ModelDisplayName() string {
-	return "Claude Sonnet 4"
-}
 
 // ChunkType identifies the kind of stream chunk.
 type ChunkType int
@@ -76,14 +71,15 @@ type Agent struct {
 	executor   *tool.ToolExecutor
 	workDir    string
 	logger     *slog.Logger
+	model      anthropic.Model
 	PermResp   chan PermissionResponse
 }
 
 const defaultWorkerCount = 4
 
 // New creates a new Agent with the given client, registry, permission checker,
-// working directory, and logger.
-func New(client anthropic.Client, registry *tool.Registry, perms *permission.Checker, workDir string, logger *slog.Logger) *Agent {
+// working directory, logger, and model.
+func New(client anthropic.Client, registry *tool.Registry, perms *permission.Checker, workDir string, logger *slog.Logger, model anthropic.Model) *Agent {
 	return &Agent{
 		client:   client,
 		registry: registry,
@@ -93,13 +89,42 @@ func New(client anthropic.Client, registry *tool.Registry, perms *permission.Che
 		executor: tool.NewToolExecutor(registry, defaultWorkerCount),
 		workDir:  workDir,
 		logger:   logger,
+		model:    model,
 		PermResp: make(chan PermissionResponse, 1),
 	}
 }
 
 // ModelDisplayName returns a human-readable name for the current model.
 func (a *Agent) ModelDisplayName() string {
-	return ModelDisplayName()
+	return modelDisplayName(a.model)
+}
+
+// modelDisplayName returns a human-readable name for the given model.
+func modelDisplayName(model anthropic.Model) string {
+	switch model {
+	case anthropic.ModelClaudeOpus4_5_20251101, anthropic.ModelClaudeOpus4_5:
+		return "Claude Opus 4.5"
+	case anthropic.ModelClaudeOpus4_0, anthropic.ModelClaudeOpus4_20250514, anthropic.ModelClaude4Opus20250514:
+		return "Claude Opus 4"
+	case anthropic.ModelClaudeOpus4_1_20250805:
+		return "Claude Opus 4.1"
+	case anthropic.ModelClaudeSonnet4_5, anthropic.ModelClaudeSonnet4_5_20250929:
+		return "Claude Sonnet 4.5"
+	case anthropic.ModelClaudeSonnet4_20250514, anthropic.ModelClaudeSonnet4_0, anthropic.ModelClaude4Sonnet20250514:
+		return "Claude Sonnet 4"
+	case anthropic.ModelClaude3_7SonnetLatest, anthropic.ModelClaude3_7Sonnet20250219:
+		return "Claude 3.7 Sonnet"
+	case anthropic.ModelClaude3_5HaikuLatest, anthropic.ModelClaude3_5Haiku20241022:
+		return "Claude 3.5 Haiku"
+	case anthropic.ModelClaudeHaiku4_5, anthropic.ModelClaudeHaiku4_5_20251001:
+		return "Claude Haiku 4.5"
+	case anthropic.ModelClaude3OpusLatest, anthropic.ModelClaude_3_Opus_20240229:
+		return "Claude 3 Opus"
+	case anthropic.ModelClaude_3_Haiku_20240307:
+		return "Claude 3 Haiku"
+	default:
+		return string(model)
+	}
 }
 
 // Permissions returns the permission checker for this agent.
@@ -116,6 +141,34 @@ func (a *Agent) Messages() []anthropic.MessageParam {
 // This is used to restore a conversation from a saved session.
 func (a *Agent) SetMessages(messages []anthropic.MessageParam) {
 	a.conv.SetMessages(messages)
+}
+
+// Model returns the current model identifier.
+func (a *Agent) Model() string {
+	return string(a.model)
+}
+
+// SetModel changes the model used for subsequent messages.
+func (a *Agent) SetModel(model string) {
+	a.model = anthropic.Model(model)
+}
+
+// ModelOption represents an available model choice.
+type ModelOption struct {
+	ID          string // The model identifier string
+	DisplayName string // Human-readable name
+}
+
+// AvailableModels returns the list of supported models.
+func AvailableModels() []ModelOption {
+	return []ModelOption{
+		{ID: string(anthropic.ModelClaudeSonnet4_20250514), DisplayName: "Claude Sonnet 4"},
+		{ID: string(anthropic.ModelClaudeSonnet4_5), DisplayName: "Claude Sonnet 4.5"},
+		{ID: string(anthropic.ModelClaudeOpus4_5), DisplayName: "Claude Opus 4.5"},
+		{ID: string(anthropic.ModelClaudeOpus4_0), DisplayName: "Claude Opus 4"},
+		{ID: string(anthropic.ModelClaudeHaiku4_5), DisplayName: "Claude Haiku 4.5"},
+		{ID: string(anthropic.ModelClaude3_5HaikuLatest), DisplayName: "Claude 3.5 Haiku"},
+	}
 }
 
 // SendMessage starts the agentic loop for the given user message.
@@ -162,7 +215,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 		systemPrompt := BuildSystemPrompt(a.workDir, a.registry)
 
 		stream := a.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:    Model,
+			Model:     a.model,
 			MaxTokens: defaultMaxToks,
 			System: []anthropic.TextBlockParam{
 				{Text: systemPrompt},
@@ -252,7 +305,7 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 			ch <- StreamChunk{
 				Type: ChunkDone,
 				Usage: &Usage{
-					Model:        string(Model),
+					Model:        string(a.model),
 					InputTokens:  totalInputTokens,
 					OutputTokens: totalOutputTokens,
 				},

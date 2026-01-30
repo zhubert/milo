@@ -5,7 +5,6 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/zhubert/milo/internal/agent"
 	"github.com/zhubert/milo/internal/version"
 )
 
@@ -37,17 +36,23 @@ var (
 
 // Header renders the top bar of the TUI.
 type Header struct {
-	workDir string
+	workDir          string
+	modelDisplayName string
 }
 
-// NewHeader creates a header showing the working directory.
-func NewHeader(workDir string) *Header {
-	return &Header{workDir: workDir}
+// NewHeader creates a header showing the working directory and model name.
+func NewHeader(workDir, modelDisplayName string) *Header {
+	return &Header{workDir: workDir, modelDisplayName: modelDisplayName}
 }
 
 // View renders the header as a string (now empty since content moved to chat).
 func (h *Header) View() string {
 	return ""
+}
+
+// WorkDir returns the working directory.
+func (h *Header) WorkDir() string {
+	return h.workDir
 }
 
 // WelcomeContent renders the logo and welcome message for the chat viewport.
@@ -66,7 +71,7 @@ func (h *Header) WelcomeContent() string {
 
 	// Build info lines.
 	line1 := versionStyle.Render("v" + version.Version)
-	line2 := infoStyle.Render(agent.ModelDisplayName())
+	line2 := infoStyle.Render(h.modelDisplayName)
 	line3 := DimStyle.Render(displayDir)
 
 	// Build logo column with synthwave gradient.
