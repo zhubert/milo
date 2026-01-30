@@ -19,6 +19,7 @@ import (
 )
 
 var cpuprofile string
+var modelFlag string
 
 var rootCmd = &cobra.Command{
 	Use:     "milo",
@@ -29,6 +30,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.Flags().StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
+	rootCmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Claude model to use (e.g., claude-sonnet-4-20250514, claude-opus-4-5-20251101)")
 }
 
 // Execute runs the root command.
@@ -97,7 +99,13 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 
 	client := anthropic.NewClient()
-	ag := agent.New(client, registry, perms, workDir, logger)
+
+	model := agent.DefaultModel
+	if modelFlag != "" {
+		model = anthropic.Model(modelFlag)
+	}
+
+	ag := agent.New(client, registry, perms, workDir, logger, model)
 
 	m := app.New(ag, workDir)
 	p := tea.NewProgram(m, tea.WithAltScreen())

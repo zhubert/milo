@@ -13,6 +13,8 @@ import (
 // AgentInterface defines the interface that the app needs from an agent.
 type AgentInterface interface {
 	ModelDisplayName() string
+	Model() string
+	SetModel(model string)
 	Permissions() *permission.Checker
 	SendMessage(ctx context.Context, msg string) <-chan agent.StreamChunk
 }
@@ -44,7 +46,7 @@ type Model struct {
 
 // New creates the root app model.
 func New(ag AgentInterface, workDir string) *Model {
-	header := ui.NewHeader(workDir)
+	header := ui.NewHeader(workDir, ag.ModelDisplayName())
 	chat := ui.NewChat()
 	chat.SetWelcomeContent(header.WelcomeContent())
 

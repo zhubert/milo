@@ -22,7 +22,7 @@ func TestNewAgent(t *testing.T) {
 
 	perms := permission.NewChecker()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	ag := New(client, registry, perms, "/tmp/test", logger)
+	ag := New(client, registry, perms, "/tmp/test", logger, DefaultModel)
 	if ag == nil {
 		t.Fatal("expected non-nil agent")
 	}
