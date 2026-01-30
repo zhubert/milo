@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime/pprof"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/anthropics/anthropic-sdk-go"
@@ -20,7 +19,6 @@ import (
 )
 
 var (
-	cpuprofile string
 	resumeFlag string
 	newSession bool
 	modelFlag  string
@@ -34,7 +32,6 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.Flags().StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
 	rootCmd.Flags().StringVar(&resumeFlag, "resume", "", "resume a previous session by ID (or 'last' for most recent)")
 	rootCmd.Flags().BoolVar(&newSession, "new", false, "start a new session (ignore any existing session)")
 	rootCmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Claude model to use (e.g., claude-sonnet-4-20250514, claude-opus-4-5-20251101)")
@@ -48,19 +45,6 @@ func Execute() {
 }
 
 func runTUI(cmd *cobra.Command, args []string) error {
-	// Start CPU profiling if requested
-	if cpuprofile != "" {
-		f, err := os.Create(cpuprofile)
-		if err != nil {
-			return fmt.Errorf("creating CPU profile: %w", err)
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			return fmt.Errorf("starting CPU profile: %w", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
 	logger, cleanup, err := logging.Setup()
 	if err != nil {
 		return fmt.Errorf("setting up logging: %w", err)
