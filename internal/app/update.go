@@ -148,6 +148,7 @@ func (m *Model) handleStreamChunk(chunk agent.StreamChunk) tea.Cmd {
 		if chunk.Usage != nil {
 			m.footer.AddUsage(chunk.Usage.Model, chunk.Usage.InputTokens, chunk.Usage.OutputTokens)
 		}
+		m.saveSession()
 		m.footer.SetFlash(ui.SuccessStyle.Render("Done"))
 		return ui.FlashTick()
 

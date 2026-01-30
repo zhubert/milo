@@ -14,11 +14,16 @@ import (
 	"github.com/zhubert/milo/internal/app"
 	"github.com/zhubert/milo/internal/logging"
 	"github.com/zhubert/milo/internal/permission"
+	"github.com/zhubert/milo/internal/session"
 	"github.com/zhubert/milo/internal/tool"
 	"github.com/zhubert/milo/internal/version"
 )
 
-var cpuprofile string
+var (
+	cpuprofile string
+	resumeFlag string
+	newSession bool
+)
 
 var rootCmd = &cobra.Command{
 	Use:     "milo",
@@ -29,6 +34,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.Flags().StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
+	rootCmd.Flags().StringVar(&resumeFlag, "resume", "", "resume a previous session by ID (or 'last' for most recent)")
+	rootCmd.Flags().BoolVar(&newSession, "new", false, "start a new session (ignore any existing session)")
 }
 
 // Execute runs the root command.
@@ -96,10 +103,46 @@ func runTUI(cmd *cobra.Command, args []string) error {
 			"  export ANTHROPIC_API_KEY=sk-ant-...")
 	}
 
+	// Set up session store in project's .milo directory.
+	store, err := session.StoreForWorkDir(workDir)
+	if err != nil {
+		return fmt.Errorf("setting up session store: %w", err)
+	}
+
+	// Determine which session to use.
+	var sess *session.Session
+	if !newSession {
+		if resumeFlag != "" {
+			// Resume a specific session.
+			if resumeFlag == "last" {
+				sess, err = store.MostRecent()
+				if err != nil {
+					return fmt.Errorf("loading most recent session: %w", err)
+				}
+			} else {
+				sess, err = store.Load(resumeFlag)
+				if err != nil {
+					return fmt.Errorf("loading session %q: %w", resumeFlag, err)
+				}
+			}
+		}
+	}
+
+	// Create a new session if we don't have one.
+	if sess == nil {
+		sess, err = session.NewSession()
+		if err != nil {
+			return fmt.Errorf("creating new session: %w", err)
+		}
+		logger.Info("created new session", "id", sess.ID)
+	} else {
+		logger.Info("resumed session", "id", sess.ID, "messages", sess.MessageCount())
+	}
+
 	client := anthropic.NewClient()
 	ag := agent.New(client, registry, perms, workDir, logger)
 
-	m := app.New(ag, workDir)
+	m := app.New(ag, workDir, store, sess)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {

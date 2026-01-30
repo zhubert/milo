@@ -107,6 +107,17 @@ func (a *Agent) Permissions() *permission.Checker {
 	return a.perms
 }
 
+// Messages returns a copy of the conversation messages.
+func (a *Agent) Messages() []anthropic.MessageParam {
+	return a.conv.Messages()
+}
+
+// SetMessages replaces the conversation messages with the provided slice.
+// This is used to restore a conversation from a saved session.
+func (a *Agent) SetMessages(messages []anthropic.MessageParam) {
+	a.conv.SetMessages(messages)
+}
+
 // SendMessage starts the agentic loop for the given user message.
 // It returns a channel that emits StreamChunks as the response is generated.
 // The channel is closed when the loop completes.
