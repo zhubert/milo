@@ -71,6 +71,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		&tool.BashTool{WorkDir: workDir},
 		&tool.GlobTool{WorkDir: workDir},
 		&tool.GrepTool{WorkDir: workDir},
+		&tool.ListDirTool{WorkDir: workDir},
+		&tool.WebFetchTool{},
+		&tool.WebSearchTool{},
 	}
 	for _, t := range tools {
 		if err := registry.Register(t); err != nil {
