@@ -43,3 +43,10 @@ func (c *Conversation) Messages() []anthropic.MessageParam {
 func (c *Conversation) Len() int {
 	return len(c.messages)
 }
+
+// SetMessages replaces all messages in the conversation.
+// This is used to restore a conversation from a saved session.
+func (c *Conversation) SetMessages(messages []anthropic.MessageParam) {
+	c.messages = make([]anthropic.MessageParam, len(messages))
+	copy(c.messages, messages)
+}

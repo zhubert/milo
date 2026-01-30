@@ -144,6 +144,7 @@ func (m *Model) handleStreamChunk(chunk agent.StreamChunk) tea.Cmd {
 		m.streaming = false
 		m.chat.FinishStreaming()
 		m.streamCancel = nil
+		m.saveSession()
 		m.footer.SetFlash(ui.SuccessStyle.Render("Done"))
 		return ui.FlashTick()
 
