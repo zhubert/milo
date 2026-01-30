@@ -13,7 +13,10 @@ import (
 
 // EditTool performs string-replacement edits on files.
 // It implements FileAccessor to enable conflict detection.
-type EditTool struct{}
+type EditTool struct {
+	// History is the file history to record changes to. If nil, uses DefaultFileHistory.
+	History *FileHistory
+}
 
 // GetFilePath extracts the target file path from the input.
 func (t *EditTool) GetFilePath(input json.RawMessage) string {
@@ -95,6 +98,15 @@ func (t *EditTool) Execute(_ context.Context, input json.RawMessage) (Result, er
 		newContent = strings.ReplaceAll(content, in.OldString, in.NewString)
 	} else {
 		newContent = strings.Replace(content, in.OldString, in.NewString, 1)
+	}
+
+	// Record file state before modification for undo support.
+	history := t.History
+	if history == nil {
+		history = DefaultFileHistory
+	}
+	if err := history.RecordChange(in.FilePath, "edit", fmt.Sprintf("replace %d occurrence(s)", count)); err != nil {
+		return Result{Output: fmt.Sprintf("error recording file history: %s", err), IsError: true}, nil
 	}
 
 	if err := os.WriteFile(in.FilePath, []byte(newContent), 0644); err != nil {
