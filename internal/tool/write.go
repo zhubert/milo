@@ -12,7 +12,10 @@ import (
 
 // WriteTool writes content to a file, creating parent directories as needed.
 // It implements FileAccessor to enable conflict detection.
-type WriteTool struct{}
+type WriteTool struct {
+	// History is the file history to record changes to. If nil, uses DefaultFileHistory.
+	History *FileHistory
+}
 
 // GetFilePath extracts the target file path from the input.
 func (t *WriteTool) GetFilePath(input json.RawMessage) string {
@@ -63,6 +66,15 @@ func (t *WriteTool) Execute(_ context.Context, input json.RawMessage) (Result, e
 	dir := filepath.Dir(in.FilePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return Result{Output: fmt.Sprintf("error creating directories: %s", err), IsError: true}, nil
+	}
+
+	// Record file state before modification for undo support.
+	history := t.History
+	if history == nil {
+		history = DefaultFileHistory
+	}
+	if err := history.RecordChange(in.FilePath, "write", "write file"); err != nil {
+		return Result{Output: fmt.Sprintf("error recording file history: %s", err), IsError: true}, nil
 	}
 
 	if err := os.WriteFile(in.FilePath, []byte(in.Content), 0644); err != nil {
