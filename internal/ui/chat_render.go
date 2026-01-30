@@ -197,31 +197,18 @@ func RenderToolResult(name, input, output string, isError bool) string {
 	toolName := ToolNameStyle.Render(name)
 	summary := formatToolSummary(name, input)
 
-	b.WriteString(statusIcon + " " + toolName + "  " + summary + "\n")
-
-	// Render output if present.
+	// Show line count if output is present (collapsed by default).
+	lineCount := ""
 	if output != "" {
 		lines := strings.Split(output, "\n")
-		maxLines := 6
-		truncated := false
-		if len(lines) > maxLines {
-			lines = lines[:maxLines]
-			truncated = true
-		}
-
-		// Render each line with subtle gutter.
-		gutterStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#4B5563"))
-		for _, line := range lines {
-			if len(line) > 100 {
-				line = line[:100] + "…"
-			}
-			b.WriteString(gutterStyle.Render("│ ") + DimStyle.Render(line) + "\n")
-		}
-
-		if truncated {
-			b.WriteString(gutterStyle.Render("│ ") + DimStyle.Render("…") + "\n")
+		if len(lines) == 1 {
+			lineCount = DimStyle.Render(" (1 line)")
+		} else {
+			lineCount = DimStyle.Render(fmt.Sprintf(" (%d lines)", len(lines)))
 		}
 	}
+
+	b.WriteString(statusIcon + " " + toolName + "  " + summary + lineCount + "\n")
 
 	return b.String()
 }
