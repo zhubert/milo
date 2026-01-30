@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	ctxmgr "github.com/zhubert/milo/internal/context"
 	"github.com/zhubert/milo/internal/loopdetector"
 	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/tool"
@@ -27,6 +28,7 @@ const (
 	ChunkToolResult
 	ChunkPermissionRequest
 	ChunkParallelProgress
+	ChunkContextCompacted
 	ChunkDone
 	ChunkError
 )
@@ -47,8 +49,9 @@ type StreamChunk struct {
 	ToolInput        string
 	Result           *tool.Result
 	Err              error
-	ParallelProgress *tool.ProgressUpdate // For ChunkParallelProgress
-	Usage            *Usage               // For ChunkDone - token usage for this turn
+	ParallelProgress *tool.ProgressUpdate     // For ChunkParallelProgress
+	Usage            *Usage                   // For ChunkDone - token usage for this turn
+	CompactionInfo   *ctxmgr.CompactionResult // For ChunkContextCompacted
 }
 
 // PermissionResponse is the user's answer to a permission request.
@@ -69,6 +72,7 @@ type Agent struct {
 	conv       *Conversation
 	detector   *loopdetector.Detector
 	executor   *tool.ToolExecutor
+	ctxMgr     *ctxmgr.Manager
 	workDir    string
 	logger     *slog.Logger
 	model      anthropic.Model
@@ -80,6 +84,9 @@ const defaultWorkerCount = 4
 // New creates a new Agent with the given client, registry, permission checker,
 // working directory, logger, and model.
 func New(client anthropic.Client, registry *tool.Registry, perms *permission.Checker, workDir string, logger *slog.Logger, model anthropic.Model) *Agent {
+	// Create summarizer using the same client (will use Haiku model)
+	summarizer := ctxmgr.NewHaikuSummarizer(client)
+
 	return &Agent{
 		client:   client,
 		registry: registry,
@@ -87,6 +94,7 @@ func New(client anthropic.Client, registry *tool.Registry, perms *permission.Che
 		conv:     NewConversation(),
 		detector: loopdetector.NewWithDefaults(),
 		executor: tool.NewToolExecutor(registry, defaultWorkerCount),
+		ctxMgr:   ctxmgr.NewManagerWithDefaults(summarizer),
 		workDir:  workDir,
 		logger:   logger,
 		model:    model,
@@ -171,6 +179,16 @@ func AvailableModels() []ModelOption {
 	}
 }
 
+// TokenCount returns the current estimated token count for the conversation.
+func (a *Agent) TokenCount() int {
+	return a.conv.TokenCount()
+}
+
+// ContextLimits returns the context window limits configuration.
+func (a *Agent) ContextLimits() (available, used int) {
+	return a.ctxMgr.Limits().AvailableTokens(), a.conv.TokenCount()
+}
+
 // SendMessage starts the agentic loop for the given user message.
 // It returns a channel that emits StreamChunks as the response is generated.
 // The channel is closed when the loop completes.
@@ -210,6 +228,30 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 				Err:  fmt.Errorf("doom loop detected: %s", detection.Reason),
 			}
 			return
+		}
+
+		// Check if context window needs compaction
+		if a.ctxMgr.NeedsCompaction(a.conv.Messages()) {
+			a.logger.Info("context window compaction triggered",
+				"tokens", a.conv.TokenCount(),
+				"threshold", a.ctxMgr.Limits().SummarizationTrigger())
+
+			result, err := a.ctxMgr.Compact(ctx, a.conv.Messages())
+			if err != nil {
+				a.logger.Error("context compaction failed", "error", err)
+				// Continue anyway - the API call might fail due to context limits
+			} else {
+				a.conv.SetMessages(result.Messages)
+				a.logger.Info("context window compacted",
+					"original_tokens", result.OriginalTokens,
+					"compacted_tokens", result.CompactedTokens,
+					"summary_added", result.SummaryAdded)
+
+				ch <- StreamChunk{
+					Type:           ChunkContextCompacted,
+					CompactionInfo: result,
+				}
+			}
 		}
 
 		systemPrompt := BuildSystemPrompt(a.workDir, a.registry)
