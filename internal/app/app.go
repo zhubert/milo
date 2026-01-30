@@ -48,6 +48,11 @@ type Model struct {
 	// quitting signals the app should exit.
 	quitting bool
 
+	// Model selection state.
+	modelSelectMode   bool // true when in model selection mode
+	modelSelectIndex  int  // currently selected model index
+	availableModels   []agent.ModelOption
+
 	// Session persistence.
 	session      *session.Session
 	sessionStore *session.Store

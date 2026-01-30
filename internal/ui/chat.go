@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/zhubert/milo/internal/agent"
 )
 
 const maxInputHeight = 10
@@ -35,6 +36,10 @@ type Chat struct {
 
 	permissionMode bool   // true when waiting for permission response
 	permToolName   string // tool name for permission prompt
+
+	modelSelectMode   bool                 // true when in model selection mode
+	modelSelectModels []agent.ModelOption // available models
+	modelSelectIndex  int                  // selected model index
 
 	pendingToolName  string // tool currently being executed
 	pendingToolInput string // input for pending tool (used for spinner display)
@@ -232,10 +237,14 @@ func (c *Chat) Update(msg tea.Msg) (*Chat, tea.Cmd) {
 		}
 	}
 
-	var cmd tea.Cmd
-	c.viewport, cmd = c.viewport.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
+	// Only forward key messages to viewport when input is not focused,
+	// otherwise viewport keybindings (like 'u' for scroll up) interfere with typing.
+	if _, isKey := msg.(tea.KeyMsg); !isKey || !c.focused {
+		var cmd tea.Cmd
+		c.viewport, cmd = c.viewport.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
 
 	return c, tea.Batch(cmds...)
@@ -245,6 +254,13 @@ func (c *Chat) Update(msg tea.Msg) (*Chat, tea.Cmd) {
 func (c *Chat) SetPermissionMode(on bool, toolName string) {
 	c.permissionMode = on
 	c.permToolName = toolName
+}
+
+// SetModelSelectMode enables/disables the model selection display.
+func (c *Chat) SetModelSelectMode(on bool, models []agent.ModelOption, index int) {
+	c.modelSelectMode = on
+	c.modelSelectModels = models
+	c.modelSelectIndex = index
 }
 
 // View renders the chat component.
@@ -262,8 +278,17 @@ func (c *Chat) View() string {
 		permPrompt = c.renderPermissionPrompt()
 	}
 
+	// Build model selection interface if active.
+	var modelPrompt string
+	if c.modelSelectMode {
+		modelPrompt = c.renderModelSelection()
+	}
+
 	if permPrompt != "" {
 		return lipgloss.JoinVertical(lipgloss.Left, vpView, permPrompt, line, inputView, line)
+	}
+	if modelPrompt != "" {
+		return lipgloss.JoinVertical(lipgloss.Left, vpView, modelPrompt, line, inputView, line)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, vpView, line, inputView, line)
 }
@@ -274,6 +299,38 @@ func (c *Chat) renderPermissionPrompt() string {
 		FooterStyle.Render("n") + DimStyle.Render("o  ") +
 		FooterStyle.Render("a") + DimStyle.Render("lways")
 	return label + "  " + keys
+}
+
+func (c *Chat) renderModelSelection() string {
+	if len(c.modelSelectModels) == 0 {
+		return ""
+	}
+
+	var lines []string
+	title := lipgloss.NewStyle().Bold(true).Foreground(ColorPrimary).Render("Select Model:")
+	lines = append(lines, title)
+	lines = append(lines, "")
+
+	for i, model := range c.modelSelectModels {
+		prefix := "  "
+		style := lipgloss.NewStyle()
+		
+		if i == c.modelSelectIndex {
+			prefix = "▶ "
+			style = style.Foreground(ColorPrimary).Bold(true)
+		}
+
+		line := prefix + style.Render(model.DisplayName+" ") + DimStyle.Render("("+model.ID+")")
+		lines = append(lines, line)
+	}
+
+	lines = append(lines, "")
+	keys := FooterStyle.Render("↑↓") + DimStyle.Render(" navigate  ") +
+		FooterStyle.Render("enter") + DimStyle.Render(" select  ") +
+		FooterStyle.Render("esc") + DimStyle.Render(" cancel")
+	lines = append(lines, keys)
+
+	return strings.Join(lines, "\n")
 }
 
 // SetWelcomeContent sets the welcome content (logo/info) to show initially.

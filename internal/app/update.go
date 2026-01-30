@@ -28,6 +28,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handlePermissionKey(msg)
 		}
 
+		// Handle model selection keys.
+		if m.modelSelectMode {
+			return m.handleModelSelectKey(msg)
+		}
+
 		switch msg.String() {
 		case "ctrl+c":
 			m.cancelStream()
@@ -165,6 +170,38 @@ func (m *Model) handleStreamChunk(chunk agent.StreamChunk) tea.Cmd {
 	}
 
 	return nil
+}
+
+func (m *Model) handleModelSelectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.modelSelectIndex > 0 {
+			m.modelSelectIndex--
+		}
+	case "down", "j":
+		if m.modelSelectIndex < len(m.availableModels)-1 {
+			m.modelSelectIndex++
+		}
+	case "enter":
+		// Select the current model
+		selectedModel := m.availableModels[m.modelSelectIndex]
+		m.modelSelectMode = false
+		m.chat.SetModelSelectMode(false, nil, 0)
+		cmd := m.switchModel(selectedModel.ID)
+		return m, tea.Batch(cmd, m.chat.Focus())
+	case "esc", "ctrl+c":
+		// Cancel model selection
+		m.modelSelectMode = false
+		m.chat.SetModelSelectMode(false, nil, 0)
+		m.chat.AddSystemMessage("Model selection cancelled")
+		return m, m.chat.Focus()
+	default:
+		return m, nil // Ignore other keys
+	}
+
+	// Update the chat display with new selection
+	m.chat.SetModelSelectMode(true, m.availableModels, m.modelSelectIndex)
+	return m, nil
 }
 
 func (m *Model) handlePermissionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

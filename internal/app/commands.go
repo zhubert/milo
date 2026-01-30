@@ -160,17 +160,37 @@ func (m *Model) removePermission(perms *permission.Checker, args []string) tea.C
 
 func (m *Model) handleModelCommand(args []string) tea.Cmd {
 	if len(args) == 0 {
-		// Show current model and available options
-		return m.listModels()
+		// Enter interactive model selection mode
+		return m.enterModelSelectMode()
 	}
 
 	subcmd := strings.ToLower(args[0])
 	if subcmd == "list" || subcmd == "ls" || subcmd == "l" {
-		return m.listModels()
+		return m.enterModelSelectMode()
 	}
 
 	// Treat argument as model ID
 	return m.switchModel(subcmd)
+}
+
+func (m *Model) enterModelSelectMode() tea.Cmd {
+	m.modelSelectMode = true
+	m.availableModels = agent.AvailableModels()
+	
+	// Find current model index
+	current := m.agent.Model()
+	m.modelSelectIndex = 0
+	for i, opt := range m.availableModels {
+		if opt.ID == current {
+			m.modelSelectIndex = i
+			break
+		}
+	}
+
+	// Blur the input and show the selection interface
+	m.chat.Blur()
+	m.chat.SetModelSelectMode(true, m.availableModels, m.modelSelectIndex)
+	return nil
 }
 
 func (m *Model) listModels() tea.Cmd {
