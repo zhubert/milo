@@ -300,8 +300,13 @@ func (a *Agent) loop(ctx context.Context, ch chan<- StreamChunk) {
 
 			case "content_block_stop":
 				if currentToolName != "" {
+					// Ensure empty input is valid JSON for tools with no required params.
+					inputJSON := currentToolInput
+					if inputJSON == "" {
+						inputJSON = "{}"
+					}
 					assistantBlocks = append(assistantBlocks,
-						anthropic.NewToolUseBlock(currentToolID, json.RawMessage(currentToolInput), currentToolName),
+						anthropic.NewToolUseBlock(currentToolID, json.RawMessage(inputJSON), currentToolName),
 					)
 					toolUseBlocks = append(toolUseBlocks, toolUseInfo{
 						id:    currentToolID,

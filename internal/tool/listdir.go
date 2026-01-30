@@ -49,6 +49,10 @@ func (t *ListDirTool) InputSchema() anthropic.ToolInputSchemaParam {
 
 func (t *ListDirTool) Execute(_ context.Context, input json.RawMessage) (Result, error) {
 	var in listDirInput
+	// Handle empty input - when no required fields, API may send empty string
+	if len(input) == 0 {
+		input = []byte("{}")
+	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return Result{}, fmt.Errorf("parsing list_dir input: %w", err)
 	}
