@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/spf13/cobra"
 
 	"github.com/zhubert/milo/internal/agent"
-	"github.com/zhubert/milo/internal/app"
 	"github.com/zhubert/milo/internal/logging"
 	"github.com/zhubert/milo/internal/lsp"
 	"github.com/zhubert/milo/internal/permission"
+	"github.com/zhubert/milo/internal/runner"
 	"github.com/zhubert/milo/internal/session"
 	"github.com/zhubert/milo/internal/tool"
 	"github.com/zhubert/milo/internal/version"
@@ -156,12 +155,12 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 	ag := agent.New(client, registry, perms, workDir, logger, model)
 
-	m := app.New(ag, workDir, store, sess)
-	p := tea.NewProgram(m, tea.WithAltScreen())
-
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("running TUI: %w", err)
+	// Restore session messages if resuming.
+	if sess != nil && len(sess.Messages) > 0 {
+		ag.SetMessages(sess.Messages)
+		fmt.Printf("Session restored (%s) with %d messages\n\n", sess.ID, len(sess.Messages))
 	}
 
-	return nil
+	r := runner.New(ag, workDir, store, sess)
+	return r.Run()
 }
