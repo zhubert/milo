@@ -48,13 +48,17 @@ milo/
 ├── internal/
 │   ├── agent/        # The agentic loop implementation
 │   ├── app/          # Application orchestration
+│   ├── context/      # Context window management and summarization
 │   ├── logging/      # Structured logging via log/slog
 │   ├── loopdetector/ # Doom loop detection (stuck agent patterns)
 │   ├── permission/   # Permission system for tool execution
+│   ├── session/      # Session persistence and history
+│   ├── token/        # Token counting and estimation
 │   ├── tool/         # Tool definitions and registry
 │   ├── ui/           # Terminal UI (Bubble Tea)
 │   └── version/      # Build version information
 ├── main.go           # Entry point
+├── Makefile          # Build, test, and development tasks
 └── go.mod
 ```
 
@@ -70,11 +74,11 @@ Tools are how the agent interacts with the real world. Each tool has:
 
 Common tool categories:
 
-| Category   | Tools              | Purpose                        |
-| ---------- | ------------------ | ------------------------------ |
-| File I/O   | read, write, edit  | Read and modify files          |
-| Search     | glob, grep         | Find files and search content  |
-| Execution  | bash               | Run shell commands             |
+| Category   | Tools                    | Purpose                           |
+| ---------- | ------------------------ | --------------------------------- |
+| File I/O   | read, write, edit, move  | Read, modify, and move files      |
+| Search     | glob, grep               | Find files and search content     |
+| Execution  | bash                     | Run shell commands                |
 
 ### Permissions
 
@@ -91,8 +95,15 @@ This provides safety guardrails so the agent can't run arbitrary commands withou
 Conversations are persisted as sessions with full history. This enables:
 
 - Resuming previous conversations
-- Context window management (compaction when history is too long)
-- Undo/redo of conversation state
+- Browsing session history with `milo sessions`
+
+### Context Window Management
+
+As conversations grow, the agent automatically manages the context window:
+
+- Token counting tracks usage against model limits
+- When approaching limits, older messages are summarized using Claude Haiku
+- Recent messages are preserved intact for continuity
 
 ## Tech Stack
 
@@ -116,6 +127,39 @@ brew install zhubert/tap/milo
 go build -o milo .
 ./milo
 ```
+
+## Usage
+
+```bash
+# Start a new session
+milo
+
+# Start a fresh session (ignore any existing)
+milo --new
+
+# Resume a specific session by ID
+milo --resume <session-id>
+
+# Resume the most recent session
+milo --resume last
+
+# Use a specific Claude model
+milo -m claude-opus-4-5-20251101
+milo --model claude-sonnet-4-20250514
+
+# List all saved sessions
+milo sessions
+```
+
+### In-Session Commands
+
+| Command                  | Description                          |
+| ------------------------ | ------------------------------------ |
+| `/model`, `/m`           | Interactive model selection          |
+| `/model <id>`            | Switch to a specific model           |
+| `/permissions`, `/p`     | Manage permission rules              |
+| `/help`, `/h`            | Show available commands              |
+| `exit`, `quit`           | Close the application                |
 
 ## Development
 
