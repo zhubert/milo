@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"math/rand"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -11,6 +12,30 @@ import (
 )
 
 const maxInputHeight = 10
+
+// placeholderPhrases contains example prompts to inspire users.
+var placeholderPhrases = []string{
+	"Create a function that...",
+	"Fix this bug in my code",
+	"Write a unit test for...",
+	"Refactor this function",
+	"Add error handling to...",
+	"Generate a REST API for...",
+	"Optimize this algorithm",
+	"Debug why this fails",
+	"Add logging to...",
+	"Create a struct for...",
+	"Write documentation for...",
+	"Implement a cache for...",
+	"Add validation to...",
+	"Create a CLI tool that...",
+	"Parse this JSON into...",
+	"Add middleware for...",
+	"Create a database model for...",
+	"Write a goroutine that...",
+	"Add tests for edge cases",
+	"Review this code for issues",
+}
 
 // chatMessage stores a rendered message in the history.
 type chatMessage struct {
@@ -55,11 +80,16 @@ type ParallelProgressState struct {
 	InProgress []string
 }
 
+// randomPlaceholder returns a random placeholder phrase from the available options.
+func randomPlaceholder() string {
+	return placeholderPhrases[rand.Intn(len(placeholderPhrases))]
+}
+
 // NewChat creates a new chat component.
 func NewChat() *Chat {
 	ti := textarea.New()
 	ti.Prompt = "> "
-	ti.Placeholder = "Try \"create a function that...\""
+	ti.Placeholder = randomPlaceholder()
 	ti.CharLimit = 0
 	ti.ShowLineNumbers = false
 	ti.SetHeight(1)
