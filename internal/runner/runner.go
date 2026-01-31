@@ -142,8 +142,12 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 	// flushText renders and prints any buffered text
 	flushText := func() {
 		if textBuffer.Len() > 0 {
-			rendered := renderMarkdown(textBuffer.String())
-			fmt.Print(rendered)
+			// Suppress text output while a task is active - the task header
+			// and tool calls already show what's happening
+			if !hasActiveTask {
+				rendered := renderMarkdown(textBuffer.String())
+				fmt.Print(rendered)
+			}
 			textBuffer.Reset()
 		}
 	}
