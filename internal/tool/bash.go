@@ -73,9 +73,18 @@ type bashInput struct {
 func (t *BashTool) Name() string { return "bash" }
 
 func (t *BashTool) Description() string {
-	return "Execute a bash command and return its output. " +
-		"The command runs in a shell with a configurable timeout (default 2 minutes). " +
-		"Both stdout and stderr are captured."
+	return `Execute a bash command and return its output.
+
+IMPORTANT: This tool is for terminal operations like git, npm, docker, etc.
+DO NOT use it for file operations - use specialized tools instead:
+- File search: Use glob (NOT find or ls)
+- Content search: Use grep (NOT grep or rg)
+- Read files: Use read or multi_read (NOT cat/head/tail)
+- Edit files: Use edit (NOT sed/awk)
+- Write files: Use write (NOT echo/cat)
+
+The command runs in a shell with a configurable timeout (default 2 minutes).
+Both stdout and stderr are captured.`
 }
 
 func (t *BashTool) InputSchema() anthropic.ToolInputSchemaParam {

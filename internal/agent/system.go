@@ -96,7 +96,12 @@ func BuildSystemPrompt(workDir string, registry *tool.Registry) string {
 	b.WriteString("- Use tree to see codebase structure instead of multiple list_dir calls.\n")
 	b.WriteString("- Use multi_read to read multiple files at once instead of multiple read calls.\n")
 	b.WriteString("- You can call multiple tools in a single response. Make independent tool calls in parallel for efficiency.\n")
-	b.WriteString("- Use specialized tools (read, write, edit, glob, grep) instead of bash equivalents (cat, echo, find, grep).\n")
+	b.WriteString("- IMPORTANT: Do NOT use bash for file operations. Use specialized tools:\n")
+	b.WriteString("  - glob instead of find/ls\n")
+	b.WriteString("  - grep instead of grep/rg\n")
+	b.WriteString("  - read/multi_read instead of cat/head/tail\n")
+	b.WriteString("  - edit instead of sed/awk\n")
+	b.WriteString("  - write instead of echo/cat redirects\n")
 	b.WriteString("\n")
 
 	b.WriteString("## Code References\n\n")
