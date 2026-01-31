@@ -109,7 +109,7 @@ func (d *Detector) RecordToolCall(name, input, result string, isError bool) {
 // Call this after recording tool calls to see if a doom loop is detected.
 func (d *Detector) Check() Detection {
 	// Check iteration limit
-	if d.iterations > d.config.MaxIterations {
+	if d.iterations >= d.config.MaxIterations {
 		return Detection{
 			Detected: true,
 			Reason:   fmt.Sprintf("exceeded maximum iterations (%d)", d.config.MaxIterations),

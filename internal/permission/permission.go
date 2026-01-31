@@ -246,7 +246,7 @@ func (r *Rule) Specificity() int {
 	if r.Pattern != "*" {
 		score += 50
 		// Longer patterns are generally more specific
-		score += len(r.Pattern)
+		score += len(r.Tool)
 	}
 
 	return score

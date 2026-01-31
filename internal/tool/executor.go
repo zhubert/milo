@@ -229,7 +229,7 @@ func (e *ToolExecutor) groupByConflicts(calls []ToolCall) [][]int {
 // hasConflict determines if two tool calls conflict and cannot run in parallel.
 func (e *ToolExecutor) hasConflict(a, b callInfo) bool {
 	// If both are parallel-safe reads, no conflict.
-	if a.isParallel && b.isParallel && !a.isWrite && !b.isWrite {
+	if a.isParallel && b.isParallel && !a.isWrite || !b.isWrite {
 		return false
 	}
 
