@@ -111,6 +111,7 @@ func BuildSystemPrompt(workDir string, registry *tool.Registry) string {
 	b.WriteString("  - read/multi_read instead of cat/head/tail\n")
 	b.WriteString("  - edit instead of sed/awk\n")
 	b.WriteString("  - write instead of echo/cat redirects\n")
+	b.WriteString("  - git instead of bash git commands (provides structured output and safety checks)\n")
 	b.WriteString("\n")
 
 	b.WriteString("## Code References\n\n")
