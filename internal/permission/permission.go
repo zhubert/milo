@@ -279,6 +279,7 @@ func (c *Checker) addDefaultRules() {
 		Rule{Tool: "tree", Pattern: "*", Action: Allow},
 		Rule{Tool: "glob", Pattern: "*", Action: Allow},
 		Rule{Tool: "grep", Pattern: "*", Action: Allow},
+		Rule{Tool: "todo", Pattern: "*", Action: Allow}, // Internal state only
 	)
 
 	// Safe bash commands that don't modify state

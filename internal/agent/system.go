@@ -53,7 +53,7 @@ func BuildSystemPrompt(workDir string, registry *tool.Registry) string {
 
 	// Task management
 	b.WriteString("## Task Management\n\n")
-	b.WriteString("Use the todo tool to track progress on multi-step tasks. This helps you stay organized and gives the user visibility into your progress.\n\n")
+	b.WriteString("Use the todo tool to track progress on multi-step tasks. This gives the user visibility into your progress.\n\n")
 	b.WriteString("When to use:\n")
 	b.WriteString("- Complex tasks requiring 3+ steps\n")
 	b.WriteString("- User provides multiple tasks to complete\n")
@@ -62,7 +62,13 @@ func BuildSystemPrompt(workDir string, registry *tool.Registry) string {
 	b.WriteString("- Single, trivial tasks\n")
 	b.WriteString("- Informational questions\n")
 	b.WriteString("- Tasks completable in 1-2 quick steps\n\n")
-	b.WriteString("Mark tasks as in_progress when starting and completed immediately after finishing. Keep only ONE task in_progress at a time.\n\n")
+	b.WriteString("IMPORTANT: After creating todos, you MUST work through them:\n")
+	b.WriteString("1. Create the todo list with all tasks as 'pending'\n")
+	b.WriteString("2. Mark the first task as 'in_progress' and start working on it\n")
+	b.WriteString("3. When done, mark it 'completed' and move to the next task\n")
+	b.WriteString("4. Keep exactly ONE task 'in_progress' at a time\n")
+	b.WriteString("5. Continue until all tasks are completed\n\n")
+	b.WriteString("Do NOT just create a todo list and then move on - the todos represent work you need to do.\n\n")
 
 	// Read and include agent configuration if available
 	agentConfig := readAgentConfig(workDir)
