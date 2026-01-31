@@ -125,7 +125,7 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 
 	fmt.Println() // blank line before response
 
-	var textBuffer strings.Builder  // Buffer text for markdown rendering
+	var textBuffer strings.Builder   // Buffer text for markdown rendering
 	var pendingTool string           // Track current tool for result display
 	var initialTodosShown bool       // Have we shown the initial todo list?
 	var currentInProgressTask string // Current in-progress task (to detect changes)
@@ -195,6 +195,10 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 				os.Stdout.Sync() // Flush to show tool info immediately
 
 			case agent.ChunkToolResult:
+				// Only show result if there's a pending tool line to complete
+				if pendingTool == "" {
+					continue
+				}
 				if chunk.Result != nil {
 					// Show status and line count
 					var status string
@@ -266,7 +270,7 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 
 				// Show new task header when in-progress task changes
 				if currentTask != "" && currentTask != currentInProgressTask {
-					fmt.Printf("  %s◐%s %s\n", colorYellow, colorReset, currentTask)
+					fmt.Printf("  %s●%s %s\n", colorYellow, colorReset, currentTask)
 					currentInProgressTask = currentTask
 					hasActiveTask = true
 				} else if currentTask == "" {

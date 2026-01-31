@@ -22,11 +22,11 @@ func TestReadToolExecute(t *testing.T) {
 	tool := &ReadTool{}
 
 	tests := []struct {
-		name      string
-		input     readInput
-		wantErr   bool
-		isError   bool
-		contains  []string
+		name        string
+		input       readInput
+		wantErr     bool
+		isError     bool
+		contains    []string
 		notContains []string
 	}{
 		{
@@ -35,21 +35,21 @@ func TestReadToolExecute(t *testing.T) {
 			contains: []string{"line one", "line two", "line three", "line four", "line five"},
 		},
 		{
-			name:     "read with offset",
-			input:    readInput{FilePath: testFile, Offset: 3},
-			contains: []string{"line three", "line four"},
+			name:        "read with offset",
+			input:       readInput{FilePath: testFile, Offset: 3},
+			contains:    []string{"line three", "line four"},
 			notContains: []string{"line one", "line two"},
 		},
 		{
-			name:     "read with limit",
-			input:    readInput{FilePath: testFile, Limit: 2},
-			contains: []string{"line one", "line two"},
+			name:        "read with limit",
+			input:       readInput{FilePath: testFile, Limit: 2},
+			contains:    []string{"line one", "line two"},
 			notContains: []string{"line three"},
 		},
 		{
-			name:     "read with offset and limit",
-			input:    readInput{FilePath: testFile, Offset: 2, Limit: 2},
-			contains: []string{"line two", "line three"},
+			name:        "read with offset and limit",
+			input:       readInput{FilePath: testFile, Offset: 2, Limit: 2},
+			contains:    []string{"line two", "line three"},
 			notContains: []string{"line one", "line four"},
 		},
 		{

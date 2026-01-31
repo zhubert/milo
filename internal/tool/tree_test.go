@@ -367,10 +367,10 @@ func TestTreeErrorCases(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		tool    *TreeTool
-		input   treeInput
-		errMsg  string
+		name   string
+		tool   *TreeTool
+		input  treeInput
+		errMsg string
 	}{
 		{
 			name:   "relative path",

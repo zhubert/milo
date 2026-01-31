@@ -181,6 +181,7 @@ func (r *Rule) Matches(toolName, input string) bool {
 // matchesBashPattern checks if input matches the pattern from a "pattern:*" rule.
 // For single-word patterns (no spaces), it matches command boundaries:
 //   - "go" matches "go", "go test" but NOT "gopher"
+//
 // For multi-word patterns (contains spaces), it matches prefixes:
 //   - "rm -rf /" matches "rm -rf /", "rm -rf /home", "rm -rf /var/log"
 func matchesBashPattern(input, pattern string) bool {
@@ -248,11 +249,11 @@ func isFilePathTool(toolName string) bool {
 // Checker evaluates whether a tool is permitted to run.
 type Checker struct {
 	mu            sync.RWMutex
-	defaultRules  []Rule            // Built-in rules (read-only)
-	customRules   map[string]Rule   // User-defined rules keyed by tool:pattern
-	sessionAlways map[string]bool   // Session-level always-allow
+	defaultRules  []Rule          // Built-in rules (read-only)
+	customRules   map[string]Rule // User-defined rules keyed by tool:pattern
+	sessionAlways map[string]bool // Session-level always-allow
 	defaultAction Action
-	workDir       string            // Working directory for saving config
+	workDir       string // Working directory for saving config
 }
 
 // NewChecker creates a permission checker with default rules.

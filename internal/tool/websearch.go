@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	webSearchTimeout   = 30 * time.Second
-	maxSearchResults   = 10
-	duckDuckGoLiteURL  = "https://lite.duckduckgo.com/lite/"
+	webSearchTimeout  = 30 * time.Second
+	maxSearchResults  = 10
+	duckDuckGoLiteURL = "https://lite.duckduckgo.com/lite/"
 )
 
 // WebSearchTool searches the web using DuckDuckGo.

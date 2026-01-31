@@ -25,9 +25,9 @@ func TestGrepToolExecute(t *testing.T) {
 	dir := t.TempDir()
 
 	fileContents := map[string]string{
-		"main.go":                    "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n",
-		"util.go":                    "package main\n\nfunc helper() {}\n\nfunc utility() {}\n",
-		"readme.txt":                 "see main for details\nsome other line\n",
+		"main.go":                      "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n",
+		"util.go":                      "package main\n\nfunc helper() {}\n\nfunc utility() {}\n",
+		"readme.txt":                   "see main for details\nsome other line\n",
 		filepath.Join("sub", "lib.go"): "package sub\n\nfunc libFunc() {}\n",
 		filepath.Join(".git", "HEAD"):  "ref: refs/heads/main\n",
 	}

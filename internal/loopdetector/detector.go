@@ -11,16 +11,16 @@ import (
 
 // Default thresholds for doom loop detection.
 const (
-	DefaultMaxIterations       = 25 // Maximum turns per user request
-	DefaultMaxRepeatedCalls    = 3  // Same tool+input called this many times
-	DefaultMaxConsecutiveErrors = 5  // Consecutive error results
+	DefaultMaxIterations        = 200 // Maximum turns per user request
+	DefaultMaxRepeatedCalls     = 3   // Same tool+input called this many times
+	DefaultMaxConsecutiveErrors = 5   // Consecutive error results
 )
 
 // ToolCall represents a single tool invocation.
 type ToolCall struct {
-	Name   string
-	Input  string
-	Result string
+	Name    string
+	Input   string
+	Result  string
 	IsError bool
 }
 
@@ -48,12 +48,12 @@ type Detection struct {
 
 // Detector tracks tool call patterns and detects doom loops.
 type Detector struct {
-	config           Config
-	iterations       int
-	callHistory      []ToolCall
-	inputHashes      map[string]int    // hash(tool+input) -> count
+	config            Config
+	iterations        int
+	callHistory       []ToolCall
+	inputHashes       map[string]int // hash(tool+input) -> count
 	consecutiveErrors int
-	lastErrorHash    string
+	lastErrorHash     string
 }
 
 // New creates a new Detector with the given configuration.

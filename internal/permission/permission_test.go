@@ -430,9 +430,9 @@ func TestSpecificityOrdering(t *testing.T) {
 	}
 
 	// Add rules in non-specificity order
-	c.AddRule(Rule{Tool: "bash", Pattern: "*", Action: Ask})           // Less specific
-	c.AddRule(Rule{Tool: "bash", Pattern: "git:*", Action: Allow})     // More specific
-	c.AddRule(Rule{Tool: "bash", Pattern: "git push*", Action: Deny})  // Most specific
+	c.AddRule(Rule{Tool: "bash", Pattern: "*", Action: Ask})          // Less specific
+	c.AddRule(Rule{Tool: "bash", Pattern: "git:*", Action: Allow})    // More specific
+	c.AddRule(Rule{Tool: "bash", Pattern: "git push*", Action: Deny}) // Most specific
 
 	// git status should match "git:*" (Allow)
 	input1 := makeInput(map[string]interface{}{"command": "git status"})

@@ -13,7 +13,7 @@ type fakeTool struct {
 	name string
 }
 
-func (f *fakeTool) Name() string       { return f.name }
+func (f *fakeTool) Name() string        { return f.name }
 func (f *fakeTool) Description() string { return "A fake tool for testing" }
 func (f *fakeTool) InputSchema() anthropic.ToolInputSchemaParam {
 	return anthropic.ToolInputSchemaParam{

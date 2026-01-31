@@ -137,7 +137,6 @@ func TestStore_List(t *testing.T) {
 	}
 }
 
-
 func TestStore_MostRecent(t *testing.T) {
 	t.Parallel()
 

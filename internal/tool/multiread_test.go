@@ -187,10 +187,10 @@ func TestMultiReadErrors(t *testing.T) {
 	tool := &MultiReadTool{}
 
 	tests := []struct {
-		name     string
-		files    []fileSpec
-		errMsg   string
-		isError  bool
+		name    string
+		files   []fileSpec
+		errMsg  string
+		isError bool
 	}{
 		{
 			name: "nonexistent file",

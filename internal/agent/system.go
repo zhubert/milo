@@ -16,7 +16,7 @@ import (
 func readAgentConfig(workDir string) string {
 	// Try AGENTS.md first, then CLAUDE.md
 	filenames := []string{"AGENTS.md", "CLAUDE.md"}
-	
+
 	for _, filename := range filenames {
 		path := filepath.Join(workDir, filename)
 		content, err := os.ReadFile(path)
@@ -24,7 +24,7 @@ func readAgentConfig(workDir string) string {
 			return string(content)
 		}
 	}
-	
+
 	return ""
 }
 

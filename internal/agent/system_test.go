@@ -115,7 +115,7 @@ func TestBuildSystemPromptPrefersAgentsOverClaude(t *testing.T) {
 
 	// Create a temporary directory with both AGENTS.md and CLAUDE.md
 	tempDir := t.TempDir()
-	
+
 	agentsContent := `# AGENTS.md Content
 This should be preferred.`
 	claudeContent := `# CLAUDE.md Content
@@ -123,7 +123,7 @@ This should be ignored when AGENTS.md exists.`
 
 	agentsPath := filepath.Join(tempDir, "AGENTS.md")
 	claudePath := filepath.Join(tempDir, "CLAUDE.md")
-	
+
 	if err := os.WriteFile(agentsPath, []byte(agentsContent), 0644); err != nil {
 		t.Fatalf("writing AGENTS.md: %v", err)
 	}

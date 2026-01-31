@@ -12,7 +12,7 @@ func TestSetup(t *testing.T) {
 
 	// Create a temporary home directory for testing
 	tempHome := t.TempDir()
-	
+
 	// Override the home directory for this test
 	originalHome := os.Getenv("HOME")
 	if err := os.Setenv("HOME", tempHome); err != nil {
@@ -28,7 +28,7 @@ func TestSetup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
-	
+
 	var cleanupCalled bool
 	defer func() {
 		if !cleanupCalled {
@@ -93,7 +93,7 @@ func TestSetupWithExistingDirectory(t *testing.T) {
 
 	// Create a temporary home directory for testing
 	tempHome := t.TempDir()
-	
+
 	// Pre-create the .milo directory
 	miloDir := filepath.Join(tempHome, ".milo")
 	if err := os.MkdirAll(miloDir, 0o755); err != nil {
@@ -158,7 +158,7 @@ func TestSetupTruncatesExistingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
-	
+
 	var cleanupCalled bool
 	defer func() {
 		if !cleanupCalled {

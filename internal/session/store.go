@@ -121,7 +121,6 @@ func (s *Store) List() ([]Summary, error) {
 	return summaries, nil
 }
 
-
 // loadUnlocked loads a session without acquiring the lock.
 // Caller must hold at least a read lock.
 func (s *Store) loadUnlocked(id string) (*Session, error) {

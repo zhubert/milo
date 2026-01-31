@@ -61,7 +61,7 @@ type StreamChunk struct {
 type PermissionResponse int
 
 const (
-	PermissionGranted      PermissionResponse = iota // Allow this once
+	PermissionGranted       PermissionResponse = iota // Allow this once
 	PermissionDenied                                  // Deny this once
 	PermissionGrantedAlways                           // Allow always for this session
 )
@@ -69,18 +69,18 @@ const (
 // Agent is the core agentic loop that sends messages to Claude,
 // streams the response, executes tools, and loops until done.
 type Agent struct {
-	client     anthropic.Client
-	registry   *tool.Registry
-	perms      *permission.Checker
-	conv       *Conversation
-	detector   *loopdetector.Detector
-	executor   *tool.ToolExecutor
-	ctxMgr     *ctxmgr.Manager
-	todoStore  *todo.Store
-	workDir    string
-	logger     *slog.Logger
-	model      anthropic.Model
-	PermResp   chan PermissionResponse
+	client    anthropic.Client
+	registry  *tool.Registry
+	perms     *permission.Checker
+	conv      *Conversation
+	detector  *loopdetector.Detector
+	executor  *tool.ToolExecutor
+	ctxMgr    *ctxmgr.Manager
+	todoStore *todo.Store
+	workDir   string
+	logger    *slog.Logger
+	model     anthropic.Model
+	PermResp  chan PermissionResponse
 }
 
 const defaultWorkerCount = 4

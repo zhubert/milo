@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	defaultTreeDepth  = 4
-	maxTreeDepth      = 10
-	maxTreeEntries    = 500
+	defaultTreeDepth = 4
+	maxTreeDepth     = 10
+	maxTreeEntries   = 500
 )
 
 // TreeTool displays directory structure as a tree.
