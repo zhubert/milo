@@ -8,6 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/zhubert/milo/internal/permission"
+	"github.com/zhubert/milo/internal/todo"
 	"github.com/zhubert/milo/internal/tool"
 )
 
@@ -22,7 +23,8 @@ func TestNewAgent(t *testing.T) {
 
 	perms := permission.NewChecker()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	ag := New(client, registry, perms, "/tmp/test", logger, DefaultModel)
+	todoStore := todo.NewStore()
+	ag := New(client, registry, perms, "/tmp/test", logger, DefaultModel, todoStore)
 	if ag == nil {
 		t.Fatal("expected non-nil agent")
 	}

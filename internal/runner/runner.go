@@ -13,11 +13,13 @@ import (
 	"syscall"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/charmbracelet/glamour"
 	"github.com/chzyer/readline"
 
 	"github.com/zhubert/milo/internal/agent"
 	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/session"
+	"github.com/zhubert/milo/internal/todo"
 	"github.com/zhubert/milo/internal/version"
 )
 
@@ -135,6 +137,17 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 		}
 	}
 
+	// shouldFlush checks if we should flush (line complete, not in code block)
+	shouldFlush := func() bool {
+		s := textBuffer.String()
+		if !strings.HasSuffix(s, "\n") {
+			return false
+		}
+		// Count code fences to determine if we're in a code block
+		fenceCount := strings.Count(s, "```")
+		return fenceCount%2 == 0 // Even = not in code block
+	}
+
 	for {
 		select {
 		case <-sigCh:
@@ -153,6 +166,9 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 			switch chunk.Type {
 			case agent.ChunkText:
 				textBuffer.WriteString(chunk.Text)
+				if shouldFlush() {
+					flushText()
+				}
 
 			case agent.ChunkToolUse:
 				flushText()
@@ -201,6 +217,10 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 			case agent.ChunkContextCompacted:
 				flushText()
 				fmt.Printf("  %s→ context compacted%s\n", colorDim, colorReset)
+
+			case agent.ChunkTodoUpdate:
+				flushText()
+				displayTodos(chunk.Todos)
 
 			case agent.ChunkDone:
 				flushText()
@@ -599,123 +619,164 @@ func countLines(s string) int {
 	return strings.Count(s, "\n") + 1
 }
 
-// renderMarkdown converts markdown to styled terminal output.
-func renderMarkdown(content string) string {
+// displayTodos renders the todo list to the terminal.
+func displayTodos(todos []todo.Todo) {
+	if len(todos) == 0 {
+		return
+	}
+
+	fmt.Println()
+	fmt.Printf("  %sTasks:%s\n", colorBold, colorReset)
+	for _, t := range todos {
+		var status string
+		var textColor string
+		switch t.Status {
+		case todo.StatusPending:
+			status = colorDim + "○" + colorReset
+			textColor = colorDim
+		case todo.StatusInProgress:
+			status = colorYellow + "◐" + colorReset
+			textColor = colorReset
+		case todo.StatusCompleted:
+			status = colorGreen + "●" + colorReset
+			textColor = colorDim
+		}
+		fmt.Printf("  %s %s%s%s\n", status, textColor, t.Content, colorReset)
+	}
+	fmt.Println()
+}
+
+// markdownRenderer is the glamour renderer for terminal markdown.
+var markdownRenderer *glamour.TermRenderer
+
+func init() {
+	var err error
+	markdownRenderer, err = glamour.NewTermRenderer(
+		glamour.WithStylePath("tokyo-night"),
+		glamour.WithWordWrap(0), // No wrapping - let terminal handle it
+	)
+	if err != nil {
+		// Fallback: no rendering
+		markdownRenderer = nil
+	}
+}
+
+// addDefaultLanguageToCodeBlocks adds "text" as the language for code blocks
+// that don't specify a language. This prevents chroma from auto-detecting
+// and showing incorrect syntax highlighting (e.g., treating tree characters as errors).
+//
+// Handles both:
+// - Fenced code blocks (```) without a language
+// - 4-space indented code blocks (converted to fenced with "text")
+func addDefaultLanguageToCodeBlocks(content string) string {
 	var result strings.Builder
 	lines := strings.Split(content, "\n")
-	inCodeBlock := false
-	var codeLines []string
-	var codeLang string
+	inFencedBlock := false
+	inIndentedBlock := false
+	var indentedLines []string
 
-	for _, line := range lines {
-		// Code block fences
+	flushIndentedBlock := func() {
+		if len(indentedLines) > 0 {
+			result.WriteString("```text\n")
+			for _, l := range indentedLines {
+				// Remove the 4-space indent
+				if len(l) >= 4 {
+					result.WriteString(l[4:])
+				} else {
+					result.WriteString(l)
+				}
+				result.WriteString("\n")
+			}
+			result.WriteString("```\n")
+			indentedLines = nil
+		}
+		inIndentedBlock = false
+	}
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+
+		// Handle fenced code blocks
 		if strings.HasPrefix(line, "```") {
-			if !inCodeBlock {
-				inCodeBlock = true
-				codeLang = strings.TrimPrefix(line, "```")
-				codeLines = nil
+			flushIndentedBlock()
+			if !inFencedBlock {
+				// Opening fence
+				lang := strings.TrimPrefix(line, "```")
+				lang = strings.TrimSpace(lang)
+				if lang == "" {
+					result.WriteString("```text\n")
+				} else {
+					result.WriteString(line + "\n")
+				}
+				inFencedBlock = true
 			} else {
-				// Render the code block
-				result.WriteString(renderCodeBlock(codeLines, codeLang))
-				inCodeBlock = false
+				// Closing fence
+				result.WriteString(line + "\n")
+				inFencedBlock = false
 			}
 			continue
 		}
 
-		if inCodeBlock {
-			codeLines = append(codeLines, line)
+		// Inside a fenced block, pass through unchanged
+		if inFencedBlock {
+			result.WriteString(line + "\n")
 			continue
 		}
 
-		// Headers
-		if strings.HasPrefix(line, "### ") {
-			text := strings.TrimPrefix(line, "### ")
-			result.WriteString(colorBold + text + colorReset + "\n")
-			continue
-		}
-		if strings.HasPrefix(line, "## ") {
-			text := strings.TrimPrefix(line, "## ")
-			result.WriteString(colorBold + colorCyan + text + colorReset + "\n")
-			continue
-		}
-		if strings.HasPrefix(line, "# ") {
-			text := strings.TrimPrefix(line, "# ")
-			result.WriteString(colorBold + colorCyan + text + colorReset + "\n")
-			continue
-		}
+		// Check for 4-space indented line
+		isIndented := len(line) >= 4 && line[:4] == "    "
+		isBlank := strings.TrimSpace(line) == ""
 
-		// Bullet lists
-		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
-			result.WriteString("  • " + renderInline(line[2:]) + "\n")
-			continue
+		if isIndented {
+			inIndentedBlock = true
+			indentedLines = append(indentedLines, line)
+		} else if inIndentedBlock && isBlank {
+			// Blank line inside indented block - could be continuation
+			// Check if next non-blank line is also indented
+			nextIndented := false
+			for j := i + 1; j < len(lines); j++ {
+				nextLine := lines[j]
+				if strings.TrimSpace(nextLine) == "" {
+					continue
+				}
+				nextIndented = len(nextLine) >= 4 && nextLine[:4] == "    "
+				break
+			}
+			if nextIndented {
+				indentedLines = append(indentedLines, line)
+			} else {
+				flushIndentedBlock()
+				result.WriteString(line + "\n")
+			}
+		} else {
+			flushIndentedBlock()
+			result.WriteString(line + "\n")
 		}
-
-		// Numbered lists (basic support)
-		if len(line) > 2 && line[0] >= '1' && line[0] <= '9' && line[1] == '.' && line[2] == ' ' {
-			result.WriteString("  " + line[:2] + " " + renderInline(line[3:]) + "\n")
-			continue
-		}
-
-		// Regular line with inline formatting
-		result.WriteString(renderInline(line) + "\n")
 	}
 
-	// Handle unclosed code block
-	if inCodeBlock && len(codeLines) > 0 {
-		result.WriteString(renderCodeBlock(codeLines, codeLang))
-	}
+	// Flush any remaining indented block
+	flushIndentedBlock()
 
-	return result.String()
+	// Remove the trailing newline we added if original didn't have one
+	s := result.String()
+	if strings.HasSuffix(s, "\n") && !strings.HasSuffix(content, "\n") {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
-// renderCodeBlock formats a code block with background styling.
-func renderCodeBlock(lines []string, lang string) string {
-	var b strings.Builder
-	// Code block colors
-	codeBg := "\033[48;5;236m" // dark gray background
-	codeFg := "\033[38;5;159m" // light cyan text
-
-	if lang != "" {
-		b.WriteString(colorDim + " " + lang + " " + colorReset + "\n")
+// renderMarkdown converts markdown to styled terminal output using glamour.
+func renderMarkdown(content string) string {
+	if markdownRenderer == nil {
+		return content
 	}
-	for _, line := range lines {
-		b.WriteString(codeBg + codeFg + " " + line + " " + colorReset + "\n")
+	// Add "text" language to unlabeled code blocks to prevent auto-detection
+	content = addDefaultLanguageToCodeBlocks(content)
+	rendered, err := markdownRenderer.Render(content)
+	if err != nil {
+		return content
 	}
-	return b.String()
-}
-
-// renderInline handles bold and inline code.
-func renderInline(text string) string {
-	// Bold: **text**
-	text = renderPattern(text, "**", "**", colorBold, colorReset)
-	// Inline code: `text`
-	codeStyle := "\033[48;5;236m\033[38;5;159m"
-	text = renderPattern(text, "`", "`", codeStyle, colorReset)
-	return text
-}
-
-// renderPattern replaces delimited text with styled text.
-func renderPattern(text, open, close, startStyle, endStyle string) string {
-	var result strings.Builder
-	for {
-		start := strings.Index(text, open)
-		if start == -1 {
-			result.WriteString(text)
-			break
-		}
-		end := strings.Index(text[start+len(open):], close)
-		if end == -1 {
-			result.WriteString(text)
-			break
-		}
-		end += start + len(open)
-
-		result.WriteString(text[:start])
-		inner := text[start+len(open) : end]
-		result.WriteString(startStyle + inner + endStyle)
-		text = text[end+len(close):]
-	}
-	return result.String()
+	return strings.TrimSuffix(rendered, "\n")
 }
 
 // formatPermissionInfo extracts the key info from tool input for permission display.

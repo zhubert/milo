@@ -15,6 +15,7 @@ import (
 	"github.com/zhubert/milo/internal/permission"
 	"github.com/zhubert/milo/internal/runner"
 	"github.com/zhubert/milo/internal/session"
+	"github.com/zhubert/milo/internal/todo"
 	"github.com/zhubert/milo/internal/tool"
 	"github.com/zhubert/milo/internal/version"
 )
@@ -77,6 +78,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	// Create todo store for task tracking
+	todoStore := todo.NewStore()
+
 	registry := tool.NewRegistry()
 	tools := []tool.Tool{
 		&tool.ReadTool{},
@@ -91,6 +95,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		&tool.GrepTool{WorkDir: workDir},
 		&tool.ListDirTool{WorkDir: workDir},
 		&tool.TreeTool{WorkDir: workDir},
+		&tool.TodoTool{Store: todoStore},
 		&tool.WebFetchTool{},
 		&tool.WebSearchTool{},
 		lspTool,
@@ -155,7 +160,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		model = anthropic.Model(modelFlag)
 	}
 
-	ag := agent.New(client, registry, perms, workDir, logger, model)
+	ag := agent.New(client, registry, perms, workDir, logger, model, todoStore)
 
 	// Restore session messages if resuming.
 	if sess != nil && len(sess.Messages) > 0 {

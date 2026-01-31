@@ -10,6 +10,7 @@ import (
 	ctxmgr "github.com/zhubert/milo/internal/context"
 	"github.com/zhubert/milo/internal/loopdetector"
 	"github.com/zhubert/milo/internal/permission"
+	"github.com/zhubert/milo/internal/todo"
 	"github.com/zhubert/milo/internal/tool"
 )
 
@@ -29,6 +30,7 @@ const (
 	ChunkPermissionRequest
 	ChunkParallelProgress
 	ChunkContextCompacted
+	ChunkTodoUpdate
 	ChunkDone
 	ChunkError
 )
@@ -52,6 +54,7 @@ type StreamChunk struct {
 	ParallelProgress *tool.ProgressUpdate     // For ChunkParallelProgress
 	Usage            *Usage                   // For ChunkDone - token usage for this turn
 	CompactionInfo   *ctxmgr.CompactionResult // For ChunkContextCompacted
+	Todos            []todo.Todo              // For ChunkTodoUpdate
 }
 
 // PermissionResponse is the user's answer to a permission request.
@@ -73,6 +76,7 @@ type Agent struct {
 	detector   *loopdetector.Detector
 	executor   *tool.ToolExecutor
 	ctxMgr     *ctxmgr.Manager
+	todoStore  *todo.Store
 	workDir    string
 	logger     *slog.Logger
 	model      anthropic.Model
@@ -82,24 +86,30 @@ type Agent struct {
 const defaultWorkerCount = 4
 
 // New creates a new Agent with the given client, registry, permission checker,
-// working directory, logger, and model.
-func New(client anthropic.Client, registry *tool.Registry, perms *permission.Checker, workDir string, logger *slog.Logger, model anthropic.Model) *Agent {
+// working directory, logger, model, and todo store.
+func New(client anthropic.Client, registry *tool.Registry, perms *permission.Checker, workDir string, logger *slog.Logger, model anthropic.Model, todoStore *todo.Store) *Agent {
 	// Create summarizer using the same client (will use Haiku model)
 	summarizer := ctxmgr.NewHaikuSummarizer(client)
 
 	return &Agent{
-		client:   client,
-		registry: registry,
-		perms:    perms,
-		conv:     NewConversation(),
-		detector: loopdetector.NewWithDefaults(),
-		executor: tool.NewToolExecutor(registry, defaultWorkerCount),
-		ctxMgr:   ctxmgr.NewManagerWithDefaults(summarizer),
-		workDir:  workDir,
-		logger:   logger,
-		model:    model,
-		PermResp: make(chan PermissionResponse, 1),
+		client:    client,
+		registry:  registry,
+		perms:     perms,
+		conv:      NewConversation(),
+		detector:  loopdetector.NewWithDefaults(),
+		executor:  tool.NewToolExecutor(registry, defaultWorkerCount),
+		ctxMgr:    ctxmgr.NewManagerWithDefaults(summarizer),
+		todoStore: todoStore,
+		workDir:   workDir,
+		logger:    logger,
+		model:     model,
+		PermResp:  make(chan PermissionResponse, 1),
 	}
+}
+
+// TodoStore returns the agent's todo store.
+func (a *Agent) TodoStore() *todo.Store {
+	return a.todoStore
 }
 
 // ModelDisplayName returns a human-readable name for the current model.
@@ -548,6 +558,11 @@ func (a *Agent) executeTools(ctx context.Context, ch chan<- StreamChunk, toolUse
 		)
 		a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
 		ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
+
+		// Emit todo update if this was a todo tool call
+		if tu.name == "todo" && !result.IsError && a.todoStore != nil {
+			ch <- StreamChunk{Type: ChunkTodoUpdate, Todos: a.todoStore.List()}
+		}
 	}
 
 	return resultBlocks, false
