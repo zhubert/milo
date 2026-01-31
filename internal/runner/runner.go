@@ -1,17 +1,19 @@
 package runner
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/chzyer/readline"
 
 	"github.com/zhubert/milo/internal/agent"
 	"github.com/zhubert/milo/internal/permission"
@@ -37,6 +39,7 @@ type Runner struct {
 	sessionStore *session.Store
 	workDir      string
 	cancel       context.CancelFunc
+	rl           *readline.Instance
 }
 
 // New creates a new Runner.
@@ -57,57 +60,53 @@ func (r *Runner) Run() error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
-	reader := bufio.NewReader(os.Stdin)
+	// Set up readline with history.
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          colorBold + "> " + colorReset,
+		HistoryFile:     filepath.Join(os.Getenv("HOME"), ".milo_history"),
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+	})
+	if err != nil {
+		return fmt.Errorf("initializing readline: %w", err)
+	}
+	defer rl.Close()
+	r.rl = rl
 
 	for {
-		// Print prompt.
-		fmt.Print(colorBold + "> " + colorReset)
-
-		// Read input with interrupt handling.
-		inputCh := make(chan string, 1)
-		errCh := make(chan error, 1)
-
-		go func() {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				errCh <- err
-				return
+		line, err := rl.Readline()
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				continue // Ctrl+C clears line, continue prompting
 			}
-			inputCh <- strings.TrimSpace(line)
-		}()
-
-		select {
-		case <-sigCh:
-			fmt.Println("\nGoodbye.")
-			return nil
-		case err := <-errCh:
-			if err.Error() == "EOF" {
-				fmt.Println("\nGoodbye.")
-				return nil
-			}
-			return fmt.Errorf("reading input: %w", err)
-		case input := <-inputCh:
-			if input == "" {
-				continue
-			}
-
-			// Check for exit commands.
-			lower := strings.ToLower(input)
-			if lower == "exit" || lower == "quit" {
+			if err == io.EOF {
 				fmt.Println("Goodbye.")
 				return nil
 			}
+			return fmt.Errorf("reading input: %w", err)
+		}
 
-			// Check for slash commands.
-			if strings.HasPrefix(input, "/") {
-				r.handleSlashCommand(input)
-				continue
-			}
+		input := strings.TrimSpace(line)
+		if input == "" {
+			continue
+		}
 
-			// Process the input.
-			if err := r.processInput(input, sigCh); err != nil {
-				fmt.Fprintf(os.Stderr, "%sError: %v%s\n", colorRed, err, colorReset)
-			}
+		// Check for exit commands.
+		lower := strings.ToLower(input)
+		if lower == "exit" || lower == "quit" {
+			fmt.Println("Goodbye.")
+			return nil
+		}
+
+		// Check for slash commands.
+		if strings.HasPrefix(input, "/") {
+			r.handleSlashCommand(input)
+			continue
+		}
+
+		// Process the input.
+		if err := r.processInput(input, sigCh); err != nil {
+			fmt.Fprintf(os.Stderr, "%sError: %v%s\n", colorRed, err, colorReset)
 		}
 	}
 }
@@ -245,11 +244,13 @@ func (r *Runner) handleHelpCommand() {
 Available commands:
   /model, /m               - Change or view the current model
     list                   - Show available models
-    <model-id>             - Switch to a model (e.g. /m claude-opus-4-5)
+    <number>               - Switch by number (e.g. /m 3)
+    <model-id>             - Switch by name (e.g. /m opus)
   /permissions, /perms, /p - Manage permission rules
-    list                   - Show all custom rules
+    list                   - Show all custom rules (numbered)
     add <rule>             - Add a rule, e.g. Bash(git:*)
-    remove <rule>          - Remove a rule
+    rm <number>            - Remove by number (e.g. /p rm 2)
+    rm <rule>              - Remove by rule text
   /help, /h, /?            - Show this help message
 
   exit, quit               - Close the application
@@ -279,18 +280,30 @@ func (r *Runner) listModels() {
 
 	fmt.Printf("\nCurrent model: %s%s%s\n\n", colorBold, r.agent.ModelDisplayName(), colorReset)
 	fmt.Println("Available models:")
-	for _, opt := range models {
+	for i, opt := range models {
 		marker := "  "
 		if opt.ID == current {
 			marker = colorGreen + "→ " + colorReset
 		}
-		fmt.Printf("%s%-35s %s%s%s\n", marker, opt.ID, colorDim, opt.DisplayName, colorReset)
+		fmt.Printf("%s%s[%d]%s %-35s %s%s%s\n", marker, colorCyan, i+1, colorReset, opt.ID, colorDim, opt.DisplayName, colorReset)
 	}
-	fmt.Println("\nUsage: /model <model-id>")
+	fmt.Println("\nUsage: /m <number> or /m <model-id>")
 }
 
 func (r *Runner) switchModel(modelID string) {
 	models := agent.AvailableModels()
+
+	// Check if input is a number (1-indexed selection)
+	if num, err := strconv.Atoi(modelID); err == nil {
+		if num >= 1 && num <= len(models) {
+			match := models[num-1]
+			r.agent.SetModel(match.ID)
+			fmt.Printf("Switched to %s%s%s\n", colorGreen, match.DisplayName, colorReset)
+			return
+		}
+		fmt.Printf("%sInvalid model number: %d (choose 1-%d)%s\n", colorRed, num, len(models), colorReset)
+		return
+	}
 
 	// Find matching model (partial match allowed)
 	var match *agent.ModelOption
@@ -317,15 +330,16 @@ func (r *Runner) handlePermissionsCommand(args []string) {
 	if len(args) == 0 {
 		help := `
 Permission commands:
-  /permissions list           - Show all custom rules
-  /permissions add <rule>     - Add a rule (default: allow)
-  /permissions remove <rule>  - Remove a rule
+  /p list              - Show all custom rules (numbered)
+  /p add <rule>        - Add a rule (default: allow)
+  /p rm <number>       - Remove by number (e.g. /p rm 2)
+  /p rm <rule>         - Remove by rule text
 
 Examples:
   /p add Bash(npm:*)
   /p add Bash(go build:*)
   /p add Bash(rm -rf *):deny
-  /p remove Bash(npm:*)
+  /p rm 1
 `
 		fmt.Println(help)
 		return
@@ -354,10 +368,10 @@ func (r *Runner) listPermissions(perms *permission.Checker) {
 	}
 
 	fmt.Println("\nCustom permission rules:")
-	for _, rule := range rules {
-		fmt.Printf("  %s\n", rule.String())
+	for i, rule := range rules {
+		fmt.Printf("  %s[%d]%s %s\n", colorCyan, i+1, colorReset, rule.String())
 	}
-	fmt.Println()
+	fmt.Println("\nUsage: /p rm <number> or /p rm <rule>")
 }
 
 func (r *Runner) addPermission(perms *permission.Checker, args []string) {
@@ -378,7 +392,25 @@ func (r *Runner) addPermission(perms *permission.Checker, args []string) {
 
 func (r *Runner) removePermission(perms *permission.Checker, args []string) {
 	if len(args) == 0 {
-		fmt.Printf("%sUsage: /permissions remove <rule>%s\n", colorRed, colorReset)
+		fmt.Printf("%sUsage: /permissions remove <number> or <rule>%s\n", colorRed, colorReset)
+		return
+	}
+
+	rules := perms.CustomRules()
+
+	// Check if input is a number (1-indexed selection)
+	if num, err := strconv.Atoi(args[0]); err == nil {
+		if num >= 1 && num <= len(rules) {
+			rule := rules[num-1]
+			perms.RemoveRule(rule.Key())
+			fmt.Printf("Removed rule: %s%s%s\n", colorGreen, rule.String(), colorReset)
+			return
+		}
+		if len(rules) == 0 {
+			fmt.Printf("%sNo rules to remove%s\n", colorRed, colorReset)
+		} else {
+			fmt.Printf("%sInvalid rule number: %d (choose 1-%d)%s\n", colorRed, num, len(rules), colorReset)
+		}
 		return
 	}
 
@@ -391,9 +423,8 @@ func (r *Runner) removePermission(perms *permission.Checker, args []string) {
 }
 
 func (r *Runner) readPermissionResponse() agent.PermissionResponse {
-	reader := bufio.NewReader(os.Stdin)
 	for {
-		line, err := reader.ReadString('\n')
+		line, err := r.rl.Readline()
 		if err != nil {
 			return agent.PermissionDenied
 		}
