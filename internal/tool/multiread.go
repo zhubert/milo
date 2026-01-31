@@ -32,7 +32,7 @@ type multiReadInput struct {
 func (t *MultiReadTool) Name() string { return "multi_read" }
 
 func (t *MultiReadTool) Description() string {
-	return "Read multiple files in a single call. More efficient than multiple read calls. " +
+	return "Read multiple files in a single call. ALWAYS use this instead of multiple read calls when you need to read 2+ files. " +
 		"Each file can have optional offset (1-based line number) and limit (number of lines)."
 }
 
@@ -95,6 +95,21 @@ func (t *MultiReadTool) Execute(_ context.Context, input json.RawMessage) (Resul
 
 			if !filepath.IsAbs(s.FilePath) {
 				results[idx].err = "file_path must be an absolute path"
+				return
+			}
+
+			// Check if path is a directory
+			info, err := os.Stat(s.FilePath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					results[idx].err = "file does not exist"
+				} else {
+					results[idx].err = fmt.Sprintf("error accessing file: %s", err)
+				}
+				return
+			}
+			if info.IsDir() {
+				results[idx].err = "path is a directory, use list_dir instead"
 				return
 			}
 

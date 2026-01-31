@@ -90,6 +90,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		&tool.GlobTool{WorkDir: workDir},
 		&tool.GrepTool{WorkDir: workDir},
 		&tool.ListDirTool{WorkDir: workDir},
+		&tool.TreeTool{WorkDir: workDir},
 		&tool.WebFetchTool{},
 		&tool.WebSearchTool{},
 		lspTool,

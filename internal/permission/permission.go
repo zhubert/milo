@@ -227,6 +227,9 @@ func (c *Checker) addDefaultRules() {
 	// Read-only tools are safe by default
 	c.defaultRules = append(c.defaultRules,
 		Rule{Tool: "read", Pattern: "*", Action: Allow},
+		Rule{Tool: "multi_read", Pattern: "*", Action: Allow},
+		Rule{Tool: "list_dir", Pattern: "*", Action: Allow},
+		Rule{Tool: "tree", Pattern: "*", Action: Allow},
 		Rule{Tool: "glob", Pattern: "*", Action: Allow},
 		Rule{Tool: "grep", Pattern: "*", Action: Allow},
 	)
