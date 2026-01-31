@@ -40,7 +40,7 @@ func (s *Store) Save(session *Session) error {
 	}
 
 	path := s.sessionPath(session.ID)
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0666); err != nil {
 		return fmt.Errorf("writing session file: %w", err)
 	}
 

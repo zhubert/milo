@@ -37,9 +37,7 @@ func NewSession() (*Session, error) {
 // generateID creates a random 8-character hex ID.
 func generateID() (string, error) {
 	b := make([]byte, 4)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
+	rand.Read(b)
 	return hex.EncodeToString(b), nil
 }
 

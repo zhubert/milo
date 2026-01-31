@@ -73,7 +73,7 @@ func (t *ReadTool) Execute(_ context.Context, input json.RawMessage) (Result, er
 	if in.Offset > 0 {
 		start = in.Offset - 1
 	}
-	if start > len(lines) {
+	if start >= len(lines) {
 		start = len(lines)
 	}
 
