@@ -125,8 +125,20 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 
 	fmt.Println() // blank line before response
 
-	var textBuffer strings.Builder // Buffer text for markdown rendering
-	var pendingTool string          // Track current tool for result display
+	var textBuffer strings.Builder  // Buffer text for markdown rendering
+	var pendingTool string           // Track current tool for result display
+	var initialTodosShown bool       // Have we shown the initial todo list?
+	var currentInProgressTask string // Current in-progress task (to detect changes)
+	var hasActiveTask bool           // Is there a task in progress? (for indentation)
+	var lastTodos []todo.Todo        // Track todos for final display
+
+	// toolIndent returns the appropriate indentation for tool output
+	toolIndent := func() string {
+		if hasActiveTask {
+			return "    " // Extra indent under task header
+		}
+		return "  "
+	}
 
 	// flushText renders and prints any buffered text
 	flushText := func() {
@@ -171,11 +183,15 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 				}
 
 			case agent.ChunkToolUse:
+				// Skip displaying todo tool - shown via task headers
+				if chunk.ToolName == "todo" {
+					continue
+				}
 				flushText()
 				// Show tool with file info if available
 				toolInfo := formatToolInfo(chunk.ToolName, chunk.ToolInput)
 				pendingTool = chunk.ToolName
-				fmt.Printf("  %s→%s %s ", colorDim, colorReset, toolInfo)
+				fmt.Printf("%s%s→%s %s ", toolIndent(), colorDim, colorReset, toolInfo)
 				os.Stdout.Sync() // Flush to show tool info immediately
 
 			case agent.ChunkToolResult:
@@ -216,14 +232,56 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 
 			case agent.ChunkContextCompacted:
 				flushText()
-				fmt.Printf("  %s→ context compacted%s\n", colorDim, colorReset)
+				fmt.Printf("%s%s→ context compacted%s\n", toolIndent(), colorDim, colorReset)
 
 			case agent.ChunkTodoUpdate:
 				flushText()
-				displayTodos(chunk.Todos)
+				if len(chunk.Todos) == 0 {
+					continue
+				}
+				lastTodos = chunk.Todos
+
+				// Find current in-progress task
+				var currentTask string
+				for _, t := range chunk.Todos {
+					if t.Status == todo.StatusInProgress {
+						if t.ActiveForm != "" {
+							currentTask = t.ActiveForm
+						} else {
+							currentTask = t.Content
+						}
+						break
+					}
+				}
+
+				// Show initial todo list on first update
+				if !initialTodosShown {
+					fmt.Printf("\n  %sTasks:%s\n", colorBold, colorReset)
+					for _, t := range chunk.Todos {
+						fmt.Printf("  %s○%s %s%s%s\n", colorDim, colorReset, colorDim, t.Content, colorReset)
+					}
+					fmt.Println()
+					initialTodosShown = true
+				}
+
+				// Show new task header when in-progress task changes
+				if currentTask != "" && currentTask != currentInProgressTask {
+					fmt.Printf("  %s◐%s %s\n", colorYellow, colorReset, currentTask)
+					currentInProgressTask = currentTask
+					hasActiveTask = true
+				} else if currentTask == "" {
+					hasActiveTask = false
+				}
 
 			case agent.ChunkDone:
 				flushText()
+				// Show final completed todo list if we had todos
+				if len(lastTodos) > 0 {
+					fmt.Printf("\n  %sTasks: %s✓%s\n", colorBold, colorGreen, colorReset)
+					for _, t := range lastTodos {
+						fmt.Printf("  %s●%s %s%s%s\n", colorGreen, colorReset, colorDim, t.Content, colorReset)
+					}
+				}
 				fmt.Println()
 				r.saveSession()
 				return nil
@@ -597,33 +655,6 @@ func countLines(s string) int {
 		return 0
 	}
 	return strings.Count(s, "\n") + 1
-}
-
-// displayTodos renders the todo list to the terminal.
-func displayTodos(todos []todo.Todo) {
-	if len(todos) == 0 {
-		return
-	}
-
-	fmt.Println()
-	fmt.Printf("  %sTasks:%s\n", colorBold, colorReset)
-	for _, t := range todos {
-		var status string
-		var textColor string
-		switch t.Status {
-		case todo.StatusPending:
-			status = colorDim + "○" + colorReset
-			textColor = colorDim
-		case todo.StatusInProgress:
-			status = colorYellow + "◐" + colorReset
-			textColor = colorReset
-		case todo.StatusCompleted:
-			status = colorGreen + "●" + colorReset
-			textColor = colorDim
-		}
-		fmt.Printf("  %s %s%s%s\n", status, textColor, t.Content, colorReset)
-	}
-	fmt.Println()
 }
 
 // markdownRenderer is the glamour renderer for terminal markdown.
