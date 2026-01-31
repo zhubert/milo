@@ -283,6 +283,30 @@ func (c *Checker) addDefaultRules() {
 		Rule{Tool: "todo", Pattern: "*", Action: Allow}, // Internal state only
 	)
 
+	// Git tool permissions - safe read-only operations
+	safeGitOperations := []string{
+		"status", "log", "diff", "branch", "show", "remote", "stash list", "tag",
+	}
+	for _, operation := range safeGitOperations {
+		c.defaultRules = append(c.defaultRules, Rule{Tool: "git", Pattern: operation + "*", Action: Allow})
+	}
+
+	// Git operations that require confirmation
+	askGitOperations := []string{
+		"add", "commit", "checkout", "merge", "pull", "stash",
+	}
+	for _, operation := range askGitOperations {
+		c.defaultRules = append(c.defaultRules, Rule{Tool: "git", Pattern: operation + "*", Action: Ask})
+	}
+
+	// Dangerous git operations that should be denied by default (require explicit force=true)
+	dangerousGitOperations := []string{
+		"push --force*", "push -f*", "reset --hard*", "clean*", "rebase*",
+	}
+	for _, operation := range dangerousGitOperations {
+		c.defaultRules = append(c.defaultRules, Rule{Tool: "git", Pattern: operation + "*", Action: Deny})
+	}
+
 	// Safe bash commands that don't modify state
 	safeCommands := []string{
 		"git status*",
@@ -468,6 +492,22 @@ func extractInputString(toolName string, toolInput json.RawMessage) string {
 	case "grep":
 		if path, ok := data["path"].(string); ok {
 			return path
+		}
+	case "git":
+		if operation, ok := data["operation"].(string); ok {
+			// Include args in the input string for more specific matching
+			if args, ok := data["args"].([]interface{}); ok && len(args) > 0 {
+				argStrs := make([]string, 0, len(args))
+				for _, arg := range args {
+					if s, ok := arg.(string); ok {
+						argStrs = append(argStrs, s)
+					}
+				}
+				if len(argStrs) > 0 {
+					return operation + " " + strings.Join(argStrs, " ")
+				}
+			}
+			return operation
 		}
 	}
 

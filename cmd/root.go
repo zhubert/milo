@@ -91,6 +91,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		&tool.DiffTool{},
 		&tool.UndoTool{},
 		&tool.BashTool{WorkDir: workDir},
+		&tool.GitTool{WorkDir: workDir},
 		&tool.GlobTool{WorkDir: workDir},
 		&tool.GrepTool{WorkDir: workDir},
 		&tool.ListDirTool{WorkDir: workDir},
