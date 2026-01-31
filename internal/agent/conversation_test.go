@@ -85,7 +85,7 @@ func TestConversationMessagesReturnsCopy(t *testing.T) {
 	c.AddUserMessage("hello")
 
 	msgs := c.Messages()
-	msgs = append(msgs, anthropic.NewUserMessage(anthropic.NewTextBlock("extra")))
+	_ = append(msgs, anthropic.NewUserMessage(anthropic.NewTextBlock("extra")))
 
 	if c.Len() != 1 {
 		t.Error("modifying returned slice should not affect conversation")

@@ -209,7 +209,7 @@ func TestSetupInvalidHomeDir(t *testing.T) {
 	logger, cleanup, err := Setup()
 	if err == nil {
 		if cleanup != nil {
-			cleanup()
+			_ = cleanup() // Ignore error in test cleanup path
 		}
 		t.Error("expected Setup() to fail with invalid home directory")
 	}

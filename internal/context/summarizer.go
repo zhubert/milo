@@ -10,7 +10,7 @@ import (
 
 const (
 	// HaikuModel is the model used for summarization.
-	HaikuModel = anthropic.ModelClaude3_5HaikuLatest
+	HaikuModel = anthropic.ModelClaudeHaiku4_5
 
 	summarizationPrompt = `You are summarizing a conversation between a user and an AI coding assistant.
 Your summary will replace the original messages to save context space.
@@ -97,13 +97,13 @@ func formatContentBlock(sb *strings.Builder, block anthropic.ContentBlockParamUn
 		sb.WriteString(block.OfText.Text)
 		sb.WriteString("\n")
 	case block.OfToolUse != nil:
-		sb.WriteString(fmt.Sprintf("[Tool: %s]\n", block.OfToolUse.Name))
+		fmt.Fprintf(sb, "[Tool: %s]\n", block.OfToolUse.Name)
 		// Include truncated input for context
 		inputStr := fmt.Sprintf("%v", block.OfToolUse.Input)
 		if len(inputStr) > 200 {
 			inputStr = inputStr[:200] + "..."
 		}
-		sb.WriteString(fmt.Sprintf("Input: %s\n", inputStr))
+		fmt.Fprintf(sb, "Input: %s\n", inputStr)
 	case block.OfToolResult != nil:
 		formatToolResult(sb, block.OfToolResult)
 	}

@@ -79,7 +79,7 @@ func (t *WebFetchTool) Execute(ctx context.Context, input json.RawMessage) (Resu
 	if err != nil {
 		return Result{Output: fmt.Sprintf("error fetching URL: %s", err), IsError: true}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return Result{Output: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, resp.Status), IsError: true}, nil

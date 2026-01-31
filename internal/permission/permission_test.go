@@ -349,7 +349,9 @@ func TestAllowAlwaysSpecific(t *testing.T) {
 		t.Fatalf("expected Ask for bash, got %v", got)
 	}
 
-	c.AllowAlways("bash", input)
+	if err := c.AllowAlways("bash", input); err != nil {
+		t.Fatalf("AllowAlways failed: %v", err)
+	}
 
 	// After AllowAlways, should be allowed
 	if got := c.Check("bash", input); got != Allow {

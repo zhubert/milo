@@ -342,7 +342,7 @@ func TestMultiReadMetadata(t *testing.T) {
 	if schema.Properties == nil {
 		t.Error("InputSchema should have properties")
 	}
-	if schema.Required == nil || len(schema.Required) == 0 {
+	if len(schema.Required) == 0 {
 		t.Error("InputSchema should have required fields")
 	}
 }

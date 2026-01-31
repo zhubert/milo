@@ -125,7 +125,7 @@ func (c *Client) Start(ctx context.Context) error {
 
 	// Perform LSP initialize handshake
 	if err := c.initialize(ctx); err != nil {
-		c.close()
+		_ = c.close() // Best effort cleanup on initialization failure
 		return fmt.Errorf("initializing %s: %w", c.config.Name, err)
 	}
 

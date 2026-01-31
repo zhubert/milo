@@ -113,9 +113,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 
 	if os.Getenv("ANTHROPIC_API_KEY") == "" {
-		return errors.New("ANTHROPIC_API_KEY environment variable is not set. " +
-			"Get an API key at https://console.anthropic.com/ and export it:\n\n" +
-			"  export ANTHROPIC_API_KEY=sk-ant-...")
+		return errors.New("ANTHROPIC_API_KEY environment variable is not set, " +
+			"get an API key at https://console.anthropic.com/ and export it:\n\n" +
+			"  export ANTHROPIC_API_KEY=sk-ant-api03-YOUR_KEY_HERE")
 	}
 
 	// Set up session store in project's .milo directory.

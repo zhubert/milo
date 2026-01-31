@@ -258,7 +258,7 @@ func TestFormatMessagesOrder(t *testing.T) {
 		t.Fatal("not all messages found in output")
 	}
 
-	if !(firstIdx < secondIdx && secondIdx < thirdIdx) {
+	if firstIdx >= secondIdx || secondIdx >= thirdIdx {
 		t.Error("messages should appear in order")
 	}
 }
@@ -288,7 +288,7 @@ func TestHaikuModelConstant(t *testing.T) {
 	t.Parallel()
 
 	// Verify the model constant is set correctly
-	if HaikuModel != anthropic.ModelClaude3_5HaikuLatest {
-		t.Errorf("HaikuModel should be Claude3_5HaikuLatest, got: %v", HaikuModel)
+	if HaikuModel != anthropic.ModelClaudeHaiku4_5 {
+		t.Errorf("HaikuModel should be ClaudeHaiku4_5, got: %v", HaikuModel)
 	}
 }

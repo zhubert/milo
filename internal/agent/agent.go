@@ -130,14 +130,8 @@ func modelDisplayName(model anthropic.Model) string {
 		return "Claude Sonnet 4.5"
 	case anthropic.ModelClaudeSonnet4_20250514, anthropic.ModelClaudeSonnet4_0, anthropic.ModelClaude4Sonnet20250514:
 		return "Claude Sonnet 4"
-	case anthropic.ModelClaude3_7SonnetLatest, anthropic.ModelClaude3_7Sonnet20250219:
-		return "Claude 3.7 Sonnet"
-	case anthropic.ModelClaude3_5HaikuLatest, anthropic.ModelClaude3_5Haiku20241022:
-		return "Claude 3.5 Haiku"
 	case anthropic.ModelClaudeHaiku4_5, anthropic.ModelClaudeHaiku4_5_20251001:
 		return "Claude Haiku 4.5"
-	case anthropic.ModelClaude3OpusLatest, anthropic.ModelClaude_3_Opus_20240229:
-		return "Claude 3 Opus"
 	case anthropic.ModelClaude_3_Haiku_20240307:
 		return "Claude 3 Haiku"
 	default:
@@ -185,7 +179,6 @@ func AvailableModels() []ModelOption {
 		{ID: string(anthropic.ModelClaudeOpus4_5), DisplayName: "Claude Opus 4.5"},
 		{ID: string(anthropic.ModelClaudeOpus4_0), DisplayName: "Claude Opus 4"},
 		{ID: string(anthropic.ModelClaudeHaiku4_5), DisplayName: "Claude Haiku 4.5"},
-		{ID: string(anthropic.ModelClaude3_5HaikuLatest), DisplayName: "Claude 3.5 Haiku"},
 	}
 }
 

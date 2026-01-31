@@ -62,12 +62,27 @@ func (r *Rule) Key() string {
 // For allow (the default), the action suffix is omitted.
 // Tool names are capitalized (Bash, Read, Write).
 func (r *Rule) String() string {
-	// Capitalize tool name
-	tool := strings.Title(r.Tool)
+	// Capitalize tool name (simple ASCII title case)
+	tool := titleCase(r.Tool)
 	if r.Action == Allow {
 		return fmt.Sprintf("%s(%s)", tool, r.Pattern)
 	}
 	return fmt.Sprintf("%s(%s):%s", tool, r.Pattern, r.Action.String())
+}
+
+// titleCase capitalizes the first letter of each word in s.
+// This is a simple ASCII-only replacement for the deprecated strings.Title.
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	words := strings.Fields(s)
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // ParseRule parses a compact rule string like "Bash(npm *)" or "Bash(rm -rf *):deny"

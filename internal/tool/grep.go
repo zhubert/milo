@@ -167,7 +167,7 @@ func searchFile(path, rel string, re *regexp.Regexp, b *strings.Builder, limit i
 	if err != nil {
 		return 0, fmt.Errorf("opening file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNum := 0
@@ -199,7 +199,7 @@ func isBinary(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	buf := make([]byte, binaryCheckLen)
 	n, err := f.Read(buf)

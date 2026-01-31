@@ -72,7 +72,7 @@ func (r *Runner) Run() error {
 	if err != nil {
 		return fmt.Errorf("initializing readline: %w", err)
 	}
-	defer rl.Close()
+	defer func() { _ = rl.Close() }()
 	r.rl = rl
 
 	for {
@@ -195,7 +195,7 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 				toolInfo := formatToolInfo(chunk.ToolName, chunk.ToolInput)
 				pendingTool = chunk.ToolName
 				fmt.Printf("%s%s→%s %s ", toolIndent(), colorDim, colorReset, toolInfo)
-				os.Stdout.Sync() // Flush to show tool info immediately
+				_ = os.Stdout.Sync() // Flush to show tool info immediately
 
 			case agent.ChunkToolResult:
 				// Only show result if there's a pending tool line to complete
