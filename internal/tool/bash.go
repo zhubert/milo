@@ -12,7 +12,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-const defaultBashTimeout = 2 * time.Minute
+const defaultBashTimeout = 2 * time.Hour
 
 // stripCDToWorkDir removes a "cd <workdir> &&" or "cd <workdir>;" prefix from a command
 // if the path matches the working directory. Commands already run in the working directory,

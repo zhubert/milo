@@ -17,7 +17,7 @@ import (
 const (
 	// DefaultModel is the Claude model used when none is specified.
 	DefaultModel   = anthropic.ModelClaudeSonnet4_20250514
-	defaultMaxToks = 8192
+	defaultMaxToks = 8129
 )
 
 // ChunkType identifies the kind of stream chunk.
@@ -83,7 +83,7 @@ type Agent struct {
 	PermResp  chan PermissionResponse
 }
 
-const defaultWorkerCount = 4
+var defaultWorkerCount = 4
 
 // New creates a new Agent with the given client, registry, permission checker,
 // working directory, logger, model, and todo store.

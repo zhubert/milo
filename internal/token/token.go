@@ -9,7 +9,7 @@ import (
 // Approximate tokens per character for Claude models.
 // Claude uses a BPE tokenizer where ~4 characters = 1 token for English text.
 // This is a conservative estimate; actual token counts may vary.
-const charsPerToken = 4
+var charsPerToken = 4
 
 // Count estimates the number of tokens in a string.
 func Count(s string) int {
