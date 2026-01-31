@@ -26,12 +26,15 @@ func (t *GlobTool) IsParallelSafe() bool { return true }
 type globInput struct {
 	Pattern string `json:"pattern"`
 	Path    string `json:"path"`
+	Include string `json:"include"` // filename glob to include
+	Exclude string `json:"exclude"` // filename glob to exclude
 }
 
 func (t *GlobTool) Name() string { return "glob" }
 
 func (t *GlobTool) Description() string {
 	return "Find files matching a glob pattern. Supports ** for recursive directory matching. " +
+		"Use 'include' to filter by filename (e.g., *.go) and 'exclude' to skip files (e.g., *_test.go). " +
 		"Returns matching file paths sorted alphabetically, one per line. " +
 		"Skips .git directories. Results capped at 1000 files."
 }
@@ -46,6 +49,14 @@ func (t *GlobTool) InputSchema() anthropic.ToolInputSchemaParam {
 			"path": map[string]any{
 				"type":        "string",
 				"description": "Absolute directory to search in. Defaults to working directory if not provided.",
+			},
+			"include": map[string]any{
+				"type":        "string",
+				"description": "Glob pattern to filter filenames (e.g., *.go, *.{ts,tsx}). Only files matching this pattern are included.",
+			},
+			"exclude": map[string]any{
+				"type":        "string",
+				"description": "Glob pattern to exclude filenames (e.g., *_test.go, *.min.js). Files matching this pattern are skipped.",
 			},
 		},
 		Required: []string{"pattern"},
@@ -92,6 +103,24 @@ func (t *GlobTool) Execute(_ context.Context, input json.RawMessage) (Result, er
 		}
 
 		if matchGlob(segments, strings.Split(rel, string(filepath.Separator))) {
+			filename := d.Name()
+
+			// Apply include filter if specified
+			if in.Include != "" {
+				matched, err := filepath.Match(in.Include, filename)
+				if err != nil || !matched {
+					return nil // skip files not matching include
+				}
+			}
+
+			// Apply exclude filter if specified
+			if in.Exclude != "" {
+				matched, err := filepath.Match(in.Exclude, filename)
+				if err == nil && matched {
+					return nil // skip files matching exclude
+				}
+			}
+
 			matches = append(matches, rel)
 			if len(matches) >= maxGlobResults {
 				return filepath.SkipAll
