@@ -8,20 +8,20 @@ A coding agent is a loop that alternates between asking an LLM "what should I do
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Terminal UI (TUI)                │
-│         User input, streaming display, dialogs      │
+│                      Runner                         │
+│       Readline-based input, streaming display       │
 ├─────────────────────────────────────────────────────┤
 │                   Session Manager                   │
-│        Message history, persistence, branching      │
+│          Message history and persistence            │
 ├──────────────┬──────────────────┬───────────────────┤
 │  Agent Loop  │   Tool Registry  │  Permission System│
 │  (the core)  │  built-in tools  │  allow/deny/ask   │
 ├──────────────┴──────────────────┴───────────────────┤
 │              LLM Provider Abstraction               │
-│         Anthropic, for now                          │
+│                     Anthropic                       │
 ├─────────────────────────────────────────────────────┤
 │              Supporting Infrastructure              │
-│  Config, others in progress                         │
+│  LSP, Context Management, Todo Tracking, Logging    │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -47,15 +47,16 @@ milo/
 ├── cmd/              # CLI entry point (Cobra commands)
 ├── internal/
 │   ├── agent/        # The agentic loop implementation
-│   ├── app/          # Application orchestration
 │   ├── context/      # Context window management and summarization
 │   ├── logging/      # Structured logging via log/slog
 │   ├── loopdetector/ # Doom loop detection (stuck agent patterns)
+│   ├── lsp/          # Language Server Protocol integration
 │   ├── permission/   # Permission system for tool execution
+│   ├── runner/       # Readline-based CLI runner
 │   ├── session/      # Session persistence and history
+│   ├── todo/         # Task list management for the agent
 │   ├── token/        # Token counting and estimation
 │   ├── tool/         # Tool definitions and registry
-│   ├── ui/           # Terminal UI (Bubble Tea)
 │   └── version/      # Build version information
 ├── main.go           # Entry point
 ├── Makefile          # Build, test, and development tasks
@@ -74,11 +75,15 @@ Tools are how the agent interacts with the real world. Each tool has:
 
 Common tool categories:
 
-| Category   | Tools                    | Purpose                           |
-| ---------- | ------------------------ | --------------------------------- |
-| File I/O   | read, write, edit, move  | Read, modify, and move files      |
-| Search     | glob, grep               | Find files and search content     |
-| Execution  | bash                     | Run shell commands                |
+| Category   | Tools                              | Purpose                              |
+| ---------- | ---------------------------------- | ------------------------------------ |
+| File I/O   | read, multiread, write, edit, move | Read, modify, and move files         |
+| File Info  | diff, undo                         | View changes and revert edits        |
+| Navigation | glob, grep, listdir, tree          | Find files and explore directories   |
+| Execution  | bash, git                          | Run shell commands and git operations|
+| Web        | webfetch, websearch                | Fetch URLs and search the web        |
+| LSP        | lsp                                | Language server queries (hover, etc.)|
+| Planning   | todo                               | Task list management                 |
 
 ### Permissions
 
@@ -108,10 +113,10 @@ As conversations grow, the agent automatically manages the context window:
 ## Tech Stack
 
 - **Go** — the implementation language
-- **Bubble Tea** — terminal UI framework
-- **Lip Gloss** — terminal styling
 - **Anthropic SDK** — LLM provider integration
 - **Cobra** — CLI framework
+- **Readline** — terminal input handling
+- **Glamour** — markdown rendering
 
 ## Installation
 
@@ -181,10 +186,11 @@ go mod tidy
 Building a coding agent requires solving several interesting problems:
 
 1. **Streaming LLM responses** — rendering text as it arrives while handling tool calls mid-stream
-2. **Tool execution** — validating inputs, managing permissions, handling errors
-3. **Context management** — fitting conversation history within token limits
-4. **Terminal UX** — building an interactive experience with markdown rendering, syntax highlighting, and responsive input
-5. **State persistence** — saving and resuming sessions reliably
+2. **Tool execution** — validating inputs, managing permissions, handling errors, parallel execution
+3. **Context management** — fitting conversation history within token limits via automatic summarization
+4. **Language server integration** — leveraging LSP for hover info, diagnostics, and code intelligence
+5. **Terminal UX** — building an interactive experience with markdown rendering and responsive input
+6. **State persistence** — saving and resuming sessions reliably
 
 Milo is a sandbox for exploring these patterns and understanding what makes a coding agent work.
 
