@@ -158,15 +158,62 @@ func (r *Rule) Matches(toolName, input string) bool {
 		}
 	}
 
-	// For command patterns with colon syntax: "git:*" means "starts with git"
+	// For command patterns with colon syntax: "git:*" means command "git" with any args.
+	// This matches "git", "git status" but NOT "gitconfig".
+	// Also handles compound commands (cd /path && go test) by checking each part.
 	if toolName == "bash" && strings.HasSuffix(r.Pattern, ":*") {
-		prefix := strings.TrimSuffix(r.Pattern, ":*")
-		if strings.HasPrefix(input, prefix) {
+		cmd := strings.TrimSuffix(r.Pattern, ":*")
+		// Check the full command first
+		if matchesBashPattern(input, cmd) {
 			return true
+		}
+		// Check each part of compound commands
+		for _, part := range splitCompoundCommand(input) {
+			if matchesBashPattern(part, cmd) {
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+// matchesBashPattern checks if input matches the pattern from a "pattern:*" rule.
+// For single-word patterns (no spaces), it matches command boundaries:
+//   - "go" matches "go", "go test" but NOT "gopher"
+// For multi-word patterns (contains spaces), it matches prefixes:
+//   - "rm -rf /" matches "rm -rf /", "rm -rf /home", "rm -rf /var/log"
+func matchesBashPattern(input, pattern string) bool {
+	if strings.Contains(pattern, " ") {
+		// Multi-word pattern: use prefix matching
+		return strings.HasPrefix(input, pattern)
+	}
+	// Single-word pattern: match command boundaries
+	if input == pattern {
+		return true // Exact match: "go" matches "go"
+	}
+	// Check for command followed by space and args: "go test" matches "go"
+	return strings.HasPrefix(input, pattern+" ")
+}
+
+// splitCompoundCommand splits a shell command on &&, ||, and ; operators
+// and returns the trimmed parts.
+func splitCompoundCommand(cmd string) []string {
+	// Replace operators with a common delimiter for splitting
+	normalized := cmd
+	normalized = strings.ReplaceAll(normalized, "&&", "\x00")
+	normalized = strings.ReplaceAll(normalized, "||", "\x00")
+	normalized = strings.ReplaceAll(normalized, ";", "\x00")
+
+	parts := strings.Split(normalized, "\x00")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // Specificity returns a score indicating how specific this rule is.

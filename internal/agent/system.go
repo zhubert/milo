@@ -57,6 +57,7 @@ func BuildSystemPrompt(workDir string, registry *tool.Registry) string {
 	b.WriteString("## Guidelines\n\n")
 	b.WriteString("- Always read files before editing them.\n")
 	b.WriteString("- Use absolute file paths.\n")
+	b.WriteString("- Bash commands run in the working directory. Do not use cd; just run commands directly.\n")
 	b.WriteString("- When exploring a codebase, use tree to see the full structure instead of multiple list_dir calls.\n")
 	b.WriteString("- When reading multiple files, use multi_read instead of multiple read calls.\n")
 	b.WriteString("- Explain what you're doing before using tools.\n")

@@ -629,18 +629,20 @@ func TestColonPatternSyntax(t *testing.T) {
 
 	c := NewChecker()
 
-	// Add rule with colon syntax: git:* means "starts with git"
+	// Add rule with colon syntax: git:* means command "git" with any args
 	c.AddRule(Rule{Tool: "bash", Pattern: "git:*", Action: Allow})
 
 	tests := []struct {
 		command string
 		want    Action
 	}{
-		{"git status", Allow},
-		{"git commit -m test", Allow},
-		{"git push origin main", Allow},
-		{"gitconfig", Allow}, // Also matches since it starts with "git"
-		{"npm install", Ask}, // Doesn't match
+		{"git", Allow},                  // Exact command match
+		{"git status", Allow},           // Command with args
+		{"git commit -m test", Allow},   // Command with multiple args
+		{"git push origin main", Allow}, // Command with multiple args
+		{"gitconfig", Ask},              // NOT a match - "gitconfig" is not "git"
+		{"git-lfs pull", Ask},           // NOT a match - "git-lfs" is not "git"
+		{"npm install", Ask},            // Doesn't match
 	}
 
 	for _, tt := range tests {
@@ -650,6 +652,72 @@ func TestColonPatternSyntax(t *testing.T) {
 			got := c.Check("bash", input)
 			if got != tt.want {
 				t.Errorf("Check(%q) = %v, want %v", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCompoundCommandMatching(t *testing.T) {
+	t.Parallel()
+
+	c := NewChecker()
+
+	// Add rule for go commands: "go:*" means command "go" with any args
+	c.AddRule(Rule{Tool: "bash", Pattern: "go:*", Action: Allow})
+
+	tests := []struct {
+		command string
+		want    Action
+	}{
+		{"go test ./...", Allow},                      // Direct match
+		{"cd /path && go test ./...", Allow},          // Compound with &&
+		{"cd /path; go build", Allow},                 // Compound with ;
+		{"echo hello || go run main.go", Allow},       // Compound with ||
+		{"cd /path && npm install && go test", Allow}, // Multiple parts, one matches
+		{"cd /path && npm install", Ask},              // No go command
+		{"gopher", Ask},                               // "gopher" is not "go"
+		{"cd /path && go-task build", Ask},            // "go-task" is not "go"
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			t.Parallel()
+			input := makeInput(map[string]interface{}{"command": tt.command})
+			got := c.Check("bash", input)
+			if got != tt.want {
+				t.Errorf("Check(%q) = %v, want %v", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSplitCompoundCommand(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		command string
+		want    []string
+	}{
+		{"ls", []string{"ls"}},
+		{"cd /path && go test", []string{"cd /path", "go test"}},
+		{"echo a; echo b", []string{"echo a", "echo b"}},
+		{"cmd1 || cmd2", []string{"cmd1", "cmd2"}},
+		{"a && b; c || d", []string{"a", "b", "c", "d"}},
+		{"  spaced  &&  commands  ", []string{"spaced", "commands"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			t.Parallel()
+			got := splitCompoundCommand(tt.command)
+			if len(got) != len(tt.want) {
+				t.Errorf("splitCompoundCommand(%q) = %v, want %v", tt.command, got, tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("splitCompoundCommand(%q)[%d] = %q, want %q", tt.command, i, got[i], tt.want[i])
+				}
 			}
 		})
 	}
