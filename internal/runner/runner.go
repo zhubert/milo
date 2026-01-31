@@ -160,6 +160,7 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 				toolInfo := formatToolInfo(chunk.ToolName, chunk.ToolInput)
 				pendingTool = chunk.ToolName
 				fmt.Printf("  %s→%s %s ", colorDim, colorReset, toolInfo)
+				os.Stdout.Sync() // Flush to show tool info immediately
 
 			case agent.ChunkToolResult:
 				if chunk.Result != nil {
@@ -189,9 +190,9 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 				}
 				// Show the command/input being requested in function-call style
 				permInfo := formatPermissionInfo(chunk.ToolName, chunk.ToolInput)
-				fmt.Printf("\n%sAllow %s%s(%s%s%s)%s? [y/n/a]: %s",
+				prompt := fmt.Sprintf("%sAllow %s%s(%s%s%s)%s? [y/n/a]: %s",
 					colorYellow, colorBold, chunk.ToolName, colorDim, permInfo, colorYellow, colorReset, colorReset)
-				resp := r.readPermissionResponse()
+				resp := r.readPermissionResponseWithPrompt(prompt)
 				r.agent.PermResp <- resp
 
 			case agent.ChunkParallelProgress:
@@ -423,20 +424,36 @@ func (r *Runner) removePermission(perms *permission.Checker, args []string) {
 }
 
 func (r *Runner) readPermissionResponse() agent.PermissionResponse {
+	return r.readPermissionResponseWithPrompt("")
+}
+
+func (r *Runner) readPermissionResponseWithPrompt(prompt string) agent.PermissionResponse {
+	// Set the prompt for readline (this ensures proper display)
+	oldPrompt := r.rl.Config.Prompt
+	r.rl.SetPrompt(prompt)
+
+	first := true
 	for {
+		if !first {
+			r.rl.SetPrompt("Please enter y, n, or a: ")
+		}
+		first = false
+
 		line, err := r.rl.Readline()
 		if err != nil {
+			r.rl.SetPrompt(oldPrompt)
 			return agent.PermissionDenied
 		}
 		switch strings.ToLower(strings.TrimSpace(line)) {
 		case "y", "yes":
+			r.rl.SetPrompt(oldPrompt)
 			return agent.PermissionGranted
 		case "n", "no":
+			r.rl.SetPrompt(oldPrompt)
 			return agent.PermissionDenied
 		case "a", "always":
+			r.rl.SetPrompt(oldPrompt)
 			return agent.PermissionGrantedAlways
-		default:
-			fmt.Print("Please enter y, n, or a: ")
 		}
 	}
 }

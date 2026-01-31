@@ -67,6 +67,7 @@ func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (Result, 
 	}
 
 	var stdout, stderr bytes.Buffer
+	cmd.Stdin = nil // Explicitly close stdin to prevent commands from blocking on input
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
