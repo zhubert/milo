@@ -443,10 +443,6 @@ func (r *Runner) removePermission(perms *permission.Checker, args []string) {
 	}
 }
 
-func (r *Runner) readPermissionResponse() agent.PermissionResponse {
-	return r.readPermissionResponseWithPrompt("")
-}
-
 func (r *Runner) readPermissionResponseWithPrompt(prompt string) agent.PermissionResponse {
 	// Set the prompt for readline (this ensures proper display)
 	oldPrompt := r.rl.Config.Prompt
@@ -545,22 +541,6 @@ func shortenPath(path string) string {
 		return "~" + path[len(home):]
 	}
 	return path
-}
-
-// extractFilePath attempts to extract a file_path from JSON input.
-func extractFilePath(input string) string {
-	var data map[string]any
-	if err := json.Unmarshal([]byte(input), &data); err != nil {
-		return ""
-	}
-	if fp, ok := data["file_path"].(string); ok {
-		return fp
-	}
-	// Try "path" as well (used by some tools)
-	if fp, ok := data["path"].(string); ok {
-		return fp
-	}
-	return ""
 }
 
 // shortenFilePath returns the last n components of a path.

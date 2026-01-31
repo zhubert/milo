@@ -38,13 +38,6 @@ func (s *ServerConfig) setAvailable(available bool) {
 	s.checked = true
 }
 
-// isChecked returns whether availability has been determined.
-func (s *ServerConfig) isChecked() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.checked
-}
-
 // defaultServers defines the built-in language server configurations.
 var defaultServers = []*ServerConfig{
 	{
