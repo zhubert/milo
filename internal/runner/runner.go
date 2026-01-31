@@ -130,7 +130,6 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 	var initialTodosShown bool       // Have we shown the initial todo list?
 	var currentInProgressTask string // Current in-progress task (to detect changes)
 	var hasActiveTask bool           // Is there a task in progress? (for indentation)
-	var lastTodos []todo.Todo        // Track todos for final display
 
 	// toolIndent returns the appropriate indentation for tool output
 	toolIndent := func() string {
@@ -243,7 +242,6 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 				if len(chunk.Todos) == 0 {
 					continue
 				}
-				lastTodos = chunk.Todos
 
 				// Find current in-progress task
 				var currentTask string
@@ -279,13 +277,6 @@ func (r *Runner) processInput(input string, sigCh chan os.Signal) error {
 
 			case agent.ChunkDone:
 				flushText()
-				// Show final completed todo list if we had todos
-				if len(lastTodos) > 0 {
-					fmt.Printf("\n  %sTasks: %s✓%s\n", colorBold, colorGreen, colorReset)
-					for _, t := range lastTodos {
-						fmt.Printf("  %s●%s %s%s%s\n", colorGreen, colorReset, colorDim, t.Content, colorReset)
-					}
-				}
 				fmt.Println()
 				r.saveSession()
 				return nil
