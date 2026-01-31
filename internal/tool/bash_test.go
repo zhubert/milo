@@ -110,3 +110,110 @@ func TestBashToolExecute(t *testing.T) {
 		}
 	})
 }
+
+func TestBashToolNormalizeInput(t *testing.T) {
+	t.Parallel()
+
+	bashTool := &BashTool{WorkDir: "/home/user/project"}
+
+	tests := []struct {
+		name            string
+		input           string
+		expectedCommand string
+	}{
+		{
+			name:            "strips cd workdir with &&",
+			input:           `{"command":"cd /home/user/project && go test ./..."}`,
+			expectedCommand: "go test ./...",
+		},
+		{
+			name:            "keeps cd to different directory",
+			input:           `{"command":"cd /other/path && go test ./..."}`,
+			expectedCommand: "cd /other/path && go test ./...",
+		},
+		{
+			name:            "no cd prefix unchanged",
+			input:           `{"command":"go test ./..."}`,
+			expectedCommand: "go test ./...",
+		},
+		{
+			name:            "strips cd with semicolon",
+			input:           `{"command":"cd /home/user/project; make build"}`,
+			expectedCommand: "make build",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := bashTool.NormalizeInput([]byte(tt.input))
+
+			var parsed bashInput
+			if err := json.Unmarshal(result, &parsed); err != nil {
+				t.Fatalf("failed to unmarshal result: %v", err)
+			}
+			if parsed.Command != tt.expectedCommand {
+				t.Errorf("NormalizeInput command = %q, want %q", parsed.Command, tt.expectedCommand)
+			}
+		})
+	}
+}
+
+func TestStripCDToWorkDir(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		command  string
+		workDir  string
+		expected string
+	}{
+		{
+			name:     "strips cd workdir with &&",
+			command:  "cd /home/user/project && go test ./...",
+			workDir:  "/home/user/project",
+			expected: "go test ./...",
+		},
+		{
+			name:     "strips cd workdir with semicolon",
+			command:  "cd /home/user/project; go test ./...",
+			workDir:  "/home/user/project",
+			expected: "go test ./...",
+		},
+		{
+			name:     "keeps cd to different directory",
+			command:  "cd /other/path && go test ./...",
+			workDir:  "/home/user/project",
+			expected: "cd /other/path && go test ./...",
+		},
+		{
+			name:     "no cd prefix",
+			command:  "go test ./...",
+			workDir:  "/home/user/project",
+			expected: "go test ./...",
+		},
+		{
+			name:     "cd without separator",
+			command:  "cd /home/user/project",
+			workDir:  "/home/user/project",
+			expected: "cd /home/user/project",
+		},
+		{
+			name:     "handles extra whitespace",
+			command:  "cd /home/user/project   &&   go test ./...",
+			workDir:  "/home/user/project",
+			expected: "go test ./...",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := stripCDToWorkDir(tt.command, tt.workDir)
+			if result != tt.expected {
+				t.Errorf("stripCDToWorkDir(%q, %q) = %q, want %q",
+					tt.command, tt.workDir, result, tt.expected)
+			}
+		})
+	}
+}

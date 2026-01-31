@@ -508,24 +508,34 @@ func (c *Checker) AllowToolAlways(toolName string) {
 	c.sessionAlways[toolName] = true
 }
 
-// AddRule adds a custom rule to the checker.
+// AddRule adds a custom rule to the checker and persists to disk.
 // If a rule with the same tool:pattern already exists, it is replaced.
 func (c *Checker) AddRule(rule Rule) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.customRules[rule.Key()] = rule
+	workDir := c.workDir
+	c.mu.Unlock()
+
+	if workDir != "" {
+		_ = c.SaveToDirectory(workDir)
+	}
 }
 
 // RemoveRule removes a custom rule by its key (tool:pattern).
-// Returns true if a rule was removed.
+// Returns true if a rule was removed. Persists the change to disk.
 func (c *Checker) RemoveRule(key string) bool {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if _, exists := c.customRules[key]; exists {
+	_, exists := c.customRules[key]
+	if exists {
 		delete(c.customRules, key)
-		return true
 	}
-	return false
+	workDir := c.workDir
+	c.mu.Unlock()
+
+	if exists && workDir != "" {
+		_ = c.SaveToDirectory(workDir)
+	}
+	return exists
 }
 
 // SetDefaultAction sets the default action for unmatched tools.

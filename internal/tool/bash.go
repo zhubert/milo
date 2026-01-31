@@ -6,12 +6,59 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
 const defaultBashTimeout = 2 * time.Minute
+
+// stripCDToWorkDir removes a "cd <workdir> &&" or "cd <workdir>;" prefix from a command
+// if the path matches the working directory. Commands already run in the working directory,
+// so this prefix is redundant.
+func stripCDToWorkDir(command, workDir string) string {
+	trimmed := strings.TrimSpace(command)
+	if !strings.HasPrefix(trimmed, "cd ") {
+		return command
+	}
+
+	// Find the separator (&& or ;)
+	rest := trimmed[3:] // after "cd "
+	var sepIdx int
+	var sepLen int
+
+	andIdx := strings.Index(rest, "&&")
+	semiIdx := strings.Index(rest, ";")
+
+	if andIdx == -1 && semiIdx == -1 {
+		return command // no separator, keep as-is
+	}
+
+	if andIdx == -1 {
+		sepIdx = semiIdx
+		sepLen = 1
+	} else if semiIdx == -1 {
+		sepIdx = andIdx
+		sepLen = 2
+	} else if andIdx < semiIdx {
+		sepIdx = andIdx
+		sepLen = 2
+	} else {
+		sepIdx = semiIdx
+		sepLen = 1
+	}
+
+	path := strings.TrimSpace(rest[:sepIdx])
+	remainder := strings.TrimSpace(rest[sepIdx+sepLen:])
+
+	// Check if the path matches the working directory
+	if path == workDir {
+		return remainder
+	}
+
+	return command
+}
 
 // BashTool executes shell commands.
 type BashTool struct {
@@ -47,11 +94,35 @@ func (t *BashTool) InputSchema() anthropic.ToolInputSchemaParam {
 	}
 }
 
+// NormalizeInput strips redundant "cd <workdir> &&" prefixes from bash commands.
+// This ensures permission checks and execution see the actual command being run.
+func (t *BashTool) NormalizeInput(input json.RawMessage) json.RawMessage {
+	var in bashInput
+	if err := json.Unmarshal(input, &in); err != nil {
+		return input
+	}
+
+	normalized := stripCDToWorkDir(in.Command, t.WorkDir)
+	if normalized == in.Command {
+		return input // No change needed
+	}
+
+	in.Command = normalized
+	result, err := json.Marshal(in)
+	if err != nil {
+		return input
+	}
+	return result
+}
+
 func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (Result, error) {
 	var in bashInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return Result{}, fmt.Errorf("parsing bash input: %w", err)
 	}
+
+	// Strip unnecessary "cd <workdir> &&" prefix - commands already run in the working directory
+	in.Command = stripCDToWorkDir(in.Command, t.WorkDir)
 
 	timeout := defaultBashTimeout
 	if in.Timeout > 0 {

@@ -428,9 +428,10 @@ func (a *Agent) executeTools(ctx context.Context, ch chan<- StreamChunk, toolUse
 	// Phase 1: Check permissions for all tools (must be sequential for user interaction).
 	// Separate tools into: allowed, denied, and unknown.
 	type toolStatus struct {
-		tu      toolUseInfo
-		t       tool.Tool
-		allowed bool
+		tu              toolUseInfo
+		t               tool.Tool
+		normalizedInput string // Input after normalization (e.g., cd prefix stripped)
+		allowed         bool
 	}
 	statuses := make([]toolStatus, len(toolUseBlocks))
 
@@ -438,15 +439,14 @@ func (a *Agent) executeTools(ctx context.Context, ch chan<- StreamChunk, toolUse
 		a.logger.Info("tool execution start", "tool", tu.name, "tool_id", tu.id)
 		a.logger.Debug("tool input", "tool", tu.name, "input", tu.input)
 
-		ch <- StreamChunk{
-			Type:      ChunkToolUse,
-			ToolName:  tu.name,
-			ToolID:    tu.id,
-			ToolInput: tu.input,
-		}
-
 		t := a.registry.Lookup(tu.name)
 		if t == nil {
+			ch <- StreamChunk{
+				Type:      ChunkToolUse,
+				ToolName:  tu.name,
+				ToolID:    tu.id,
+				ToolInput: tu.input,
+			}
 			a.logger.Warn("unknown tool", "tool", tu.name)
 			result := tool.Result{Output: fmt.Sprintf("unknown tool: %s", tu.name), IsError: true}
 			resultBlocks = append(resultBlocks,
@@ -458,8 +458,21 @@ func (a *Agent) executeTools(ctx context.Context, ch chan<- StreamChunk, toolUse
 			continue
 		}
 
-		// Check permission.
-		if !a.checkPermission(ctx, ch, tu.name, json.RawMessage(tu.input)) {
+		// Normalize input if the tool supports it (e.g., bash strips "cd workdir &&").
+		normalizedInput := tu.input
+		if normalizer, ok := t.(tool.InputNormalizer); ok {
+			normalizedInput = string(normalizer.NormalizeInput(json.RawMessage(tu.input)))
+		}
+
+		ch <- StreamChunk{
+			Type:      ChunkToolUse,
+			ToolName:  tu.name,
+			ToolID:    tu.id,
+			ToolInput: normalizedInput,
+		}
+
+		// Check permission using normalized input.
+		if !a.checkPermission(ctx, ch, tu.name, json.RawMessage(normalizedInput)) {
 			if ctx.Err() != nil {
 				return resultBlocks, true // Cancelled
 			}
@@ -468,13 +481,13 @@ func (a *Agent) executeTools(ctx context.Context, ch chan<- StreamChunk, toolUse
 			resultBlocks = append(resultBlocks,
 				anthropic.NewToolResultBlock(tu.id, result.Output, result.IsError),
 			)
-			a.detector.RecordToolCall(tu.name, tu.input, result.Output, result.IsError)
+			a.detector.RecordToolCall(tu.name, normalizedInput, result.Output, result.IsError)
 			ch <- StreamChunk{Type: ChunkToolResult, ToolName: tu.name, ToolID: tu.id, Result: &result}
-			statuses[i] = toolStatus{tu: tu, t: t, allowed: false}
+			statuses[i] = toolStatus{tu: tu, t: t, normalizedInput: normalizedInput, allowed: false}
 			continue
 		}
 
-		statuses[i] = toolStatus{tu: tu, t: t, allowed: true}
+		statuses[i] = toolStatus{tu: tu, t: t, normalizedInput: normalizedInput, allowed: true}
 	}
 
 	// Phase 2: Execute allowed tools in parallel.
@@ -486,7 +499,7 @@ func (a *Agent) executeTools(ctx context.Context, ch chan<- StreamChunk, toolUse
 			allowedCalls = append(allowedCalls, tool.ToolCall{
 				ID:    s.tu.id,
 				Name:  s.tu.name,
-				Input: json.RawMessage(s.tu.input),
+				Input: json.RawMessage(s.normalizedInput),
 			})
 			allowedIndices = append(allowedIndices, i)
 		}
