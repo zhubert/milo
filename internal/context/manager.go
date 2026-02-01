@@ -209,7 +209,7 @@ func (m *Manager) summarizeOldMessages(ctx context.Context, messages []anthropic
 
 // simpleTruncate removes the oldest messages when summarization isn't available.
 func (m *Manager) simpleTruncate(messages []anthropic.MessageParam) []anthropic.MessageParam {
-	targetTokens := m.limits.SummarizationTrigger() / 3 // Target 50% of trigger threshold
+	targetTokens := m.limits.SummarizationTrigger() / 3 // Target 33% of trigger threshold
 
 	// Remove messages from the front until under budget
 	for len(messages) > 2 && token.CountMessages(messages) > targetTokens {
